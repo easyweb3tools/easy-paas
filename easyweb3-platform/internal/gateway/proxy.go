@@ -53,6 +53,24 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/"
 	}
 
+	// Temporary: public read for polymarket query endpoints.
+	// The polymarket backend expects a Bearer token presence for /api/* routes,
+	// but does not validate the token itself (it relies on gateway validation).
+	// For public GET/HEAD reads, inject a minimal "viewer" context so upstream can serve data.
+	if name == "polymarket" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		if r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, "/api/v2/") || strings.HasPrefix(r.URL.Path, "/api/catalog/") {
+			if strings.TrimSpace(r.Header.Get("Authorization")) == "" {
+				r.Header.Set("Authorization", "Bearer public")
+			}
+			if strings.TrimSpace(r.Header.Get("X-Easyweb3-Project")) == "" {
+				r.Header.Set("X-Easyweb3-Project", "polymarket")
+			}
+			if strings.TrimSpace(r.Header.Get("X-Easyweb3-Role")) == "" {
+				r.Header.Set("X-Easyweb3-Role", "viewer")
+			}
+		}
+	}
+
 	// Inject some context headers for debugging / future use.
 	if c, ok := auth.ClaimsFromContext(r.Context()); ok {
 		r.Header.Set("X-Easyweb3-Project", c.ProjectID)
