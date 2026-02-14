@@ -1,47 +1,56 @@
 # ============================================================
-# easyweb3 v2: build PicoClaw from upstream source (submodule)
+# easyweb3 v2: PicoClaw + easyweb3 CLI (single container)
 #
-# Notes:
-# - We do NOT rely on upstream Dockerfile because it may pin to
-#   non-existing Go versions. This Dockerfile is owned by easyweb3.
-# - Build context should be the picoclaw submodule directory.
+# Build context: repo root (v2/)
+# Uses PicoClaw submodule at ./picoclaw
 # ============================================================
-# Use a reasonably recent Go toolchain, and allow auto toolchain download to follow upstream.
-FROM golang:1.23-alpine AS builder
+# syntax=docker/dockerfile:1
+
+FROM golang:1.23-alpine AS picoclaw_build
 
 ENV GOTOOLCHAIN=auto
 
-RUN apk add --no-cache git make
+RUN apk add --no-cache git make ca-certificates tzdata
 
-WORKDIR /src
+WORKDIR /src/picoclaw
 
-COPY go.mod go.sum ./
-# Download modules (with retries to tolerate flaky proxy/network).
+COPY picoclaw/go.mod picoclaw/go.sum ./
 RUN set -e; \
     for i in 1 2 3 4 5; do \
-      if go mod download; then \
-        exit 0; \
-      fi; \
+      if go mod download; then exit 0; fi; \
       echo "go mod download failed, retry ${i}/5..." >&2; \
       sleep $((i * 2)); \
     done; \
     exit 1
 
-COPY . .
-# Makefile runs `go build`; keep toolchain=auto so it can follow go.mod's required version.
-RUN GOTOOLCHAIN=auto make build
+COPY picoclaw/ ./
+RUN make build
+
+FROM golang:1.22-alpine AS easyweb3_cli_build
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /src/easyweb3-cli
+
+COPY easyweb3-cli/go.mod easyweb3-cli/go.sum ./
+RUN go mod download
+
+COPY easyweb3-cli/ ./
+RUN CGO_ENABLED=0 go build -o /out/easyweb3 .
 
 FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates tzdata
 
-COPY --from=builder /src/build/picoclaw /usr/local/bin/picoclaw
+COPY --from=picoclaw_build /src/picoclaw/build/picoclaw /usr/local/bin/picoclaw
+COPY --from=picoclaw_build /src/picoclaw/skills /opt/picoclaw/skills
+COPY --from=easyweb3_cli_build /out/easyweb3 /usr/local/bin/easyweb3
 
-# Keep the same convention as upstream: ship builtin skills.
-COPY --from=builder /src/skills /opt/picoclaw/skills
+COPY picoclaw-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-RUN mkdir -p /root/.picoclaw/workspace/skills && \
-    cp -r /opt/picoclaw/skills/* /root/.picoclaw/workspace/skills/ 2>/dev/null || true
+ENV HOME=/root
 
-ENTRYPOINT ["picoclaw"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gateway"]
+

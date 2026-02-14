@@ -17,6 +17,10 @@ A minimal local stack (PaaS + polymarket backend + postgres):
 
 - `v2/docker-compose.v2.local.yml`
 
+PicoClaw (the "brain") is included in compose as an optional profile:
+
+- `docker compose --profile picoclaw up -d`
+
 Ports:
 - PaaS: `http://127.0.0.1:18080`
 - Polymarket backend (direct): `http://127.0.0.1:18088` (should be accessed via PaaS gateway in normal usage)
@@ -53,16 +57,18 @@ See: `v2/skills/README.md`.
 
 ### PicoClaw Image Build (GitHub Actions)
 
-This repo vendors upstream PicoClaw in `v2/picoclaw` and provides a build workflow:
+This repo builds all v2 images (PaaS + services + PicoClaw) via GitHub Actions:
 
-- `v2/.github/workflows/v2-picoclaw-image.yml`
+- `v2/.github/workflows/v2-build-images.yml`
 
 PicoClaw is included as a git submodule, so the build can pull latest upstream at build time.
 
 On `release/v*` branch updates (e.g. `release/v1.0.0`), it builds and pushes:
 
+- `ghcr.io/<owner>/easyweb3-platform:<version>`
+- `ghcr.io/<owner>/easyweb3-polymarket-backend:<version>`
 - `ghcr.io/<owner>/easyweb3-picoclaw:<version>` (e.g. `v1.0.0`)
-- `ghcr.io/<owner>/easyweb3-picoclaw:sha-<shortsha>`
+- Each image also pushes `:sha-<shortsha>`
 
 ### Compose Deployment Pattern (Skill Mount + Startup Login)
 
