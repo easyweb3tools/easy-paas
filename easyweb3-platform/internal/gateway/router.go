@@ -249,6 +249,19 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Proxy business services.
 	if strings.HasPrefix(r.URL.Path, "/api/v1/services/") {
+		// Temporary: allow public (no-auth) read access for polymarket query endpoints,
+		// so the web UI can be opened without login during early rollout.
+		//
+		// Note: write methods still require agent/admin. Other services remain protected.
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			if name, rest, ok := parseServicePath(r.URL.Path); ok && name == "polymarket" {
+				if rest == "/healthz" || strings.HasPrefix(rest, "/api/v2/") || strings.HasPrefix(rest, "/api/catalog/") {
+					rt.Proxy.ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+
 		// Viewer can only read. Agent/admin can write.
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
 			rt.requireAuth(rt.requireRole(rt.Proxy, "viewer", "agent", "admin")).ServeHTTP(w, r)

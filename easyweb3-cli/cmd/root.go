@@ -26,7 +26,7 @@ Global Flags:
   --project     Project id (env: EASYWEB3_PROJECT)
 
 Commands:
-  auth     login/refresh/status
+  auth     login/register/grant/refresh/status
   log      create/list/get
   notify   send/broadcast/config
   integrations query
