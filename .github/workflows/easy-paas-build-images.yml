@@ -24,6 +24,10 @@ jobs:
             image: easyweb3-polymarket-backend
             context: ./services/polymarket/backend
             dockerfile: ./services/polymarket/backend/Dockerfile
+          - name: polymarket-frontend
+            image: easyweb3-polymarket-frontend
+            context: ./services/polymarket/frontend
+            dockerfile: ./services/polymarket/frontend/Dockerfile
           - name: picoclaw
             image: easyweb3-picoclaw
             context: .

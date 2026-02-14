@@ -15,11 +15,15 @@ This repo contains the easyweb3 PaaS platform, CLI, onboarded business services,
 
 A minimal local stack (PaaS + polymarket backend + postgres):
 
-- `docker-compose.v2.local.yml`
+- `docker-compose.yml`
 
 PicoClaw (the "brain") is included in compose as an optional profile:
 
 - `docker compose --profile picoclaw up -d`
+
+Polymarket web UI (optional) can be enabled with:
+
+- `docker compose --profile web up -d` (UI at `http://127.0.0.1:18089`)
 
 Ports:
 - PaaS: `http://127.0.0.1:18080`
@@ -67,6 +71,7 @@ On `release/v*` branch updates (e.g. `release/v1.0.0`), it builds and pushes:
 
 - `ghcr.io/<owner>/easyweb3-platform:<version>`
 - `ghcr.io/<owner>/easyweb3-polymarket-backend:<version>`
+- `ghcr.io/<owner>/easyweb3-polymarket-frontend:<version>`
 - `ghcr.io/<owner>/easyweb3-picoclaw:<version>` (e.g. `v1.0.0`)
 - Each image also pushes `:sha-<shortsha>`
 
@@ -74,7 +79,7 @@ On `release/v*` branch updates (e.g. `release/v1.0.0`), it builds and pushes:
 
 There is no hard dependency that PicoClaw must be deployed via compose, but if you do, the pattern is:
 
-1. Start the PaaS + services (e.g. `docker-compose.v2.local.yml`)
+1. Start the PaaS + services (e.g. `docker-compose.yml`)
 2. Start a PicoClaw container with:
    - `skills` mounted into the container workspace skills directory
    - `easyweb3` available on `PATH`
