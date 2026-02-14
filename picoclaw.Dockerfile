@@ -6,17 +6,30 @@
 #   non-existing Go versions. This Dockerfile is owned by easyweb3.
 # - Build context should be the picoclaw submodule directory.
 # ============================================================
-FROM golang:1.22-alpine AS builder
+# Use a reasonably recent Go toolchain, and allow auto toolchain download to follow upstream.
+FROM golang:1.23-alpine AS builder
+
+ENV GOTOOLCHAIN=auto
 
 RUN apk add --no-cache git make
 
 WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN go mod download
+# Download modules (with retries to tolerate flaky proxy/network).
+RUN set -e; \
+    for i in 1 2 3 4 5; do \
+      if go mod download; then \
+        exit 0; \
+      fi; \
+      echo "go mod download failed, retry ${i}/5..." >&2; \
+      sleep $((i * 2)); \
+    done; \
+    exit 1
 
 COPY . .
-RUN make build
+# Makefile runs `go build`; keep toolchain=auto so it can follow go.mod's required version.
+RUN GOTOOLCHAIN=auto make build
 
 FROM alpine:3.21
 
@@ -32,4 +45,3 @@ RUN mkdir -p /root/.picoclaw/workspace/skills && \
 
 ENTRYPOINT ["picoclaw"]
 CMD ["gateway"]
-
