@@ -31,6 +31,10 @@ func main() {
 	if err := ks.Load(); err != nil {
 		log.Fatalf("api key store: %v", err)
 	}
+	us := auth.NewFileUserStore(cfg.UsersFile)
+	if err := us.Load(); err != nil {
+		log.Fatalf("user store: %v", err)
+	}
 
 	logsStore := logging.NewFileStore(cfg.LogsFile)
 	logsHandler := &logging.Handler{Store: logsStore}
@@ -77,7 +81,7 @@ func main() {
 
 	proxy := gateway.NewProxy(cfg.Services)
 
-	authHandler := auth.Handler{Store: ks, JWT: jwt}
+	authHandler := auth.Handler{Keys: ks, Users: us, JWT: jwt}
 	serviceHandler := service.Handler{Services: cfg.Services}
 
 	router := gateway.Router{

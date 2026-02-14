@@ -9,12 +9,16 @@ import (
 )
 
 type Handler struct {
-	Store *FileKeyStore
+	Keys  *FileKeyStore
+	Users *FileUserStore
 	JWT   JWT
 }
 
 type loginRequest struct {
-	APIKey string `json:"api_key"`
+	APIKey    string `json:"api_key,omitempty"`
+	Username  string `json:"username,omitempty"`
+	Password  string `json:"password,omitempty"`
+	ProjectID string `json:"project_id,omitempty"`
 }
 
 type tokenResponse struct {
@@ -28,15 +32,47 @@ func (h Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	rec, ok := h.Store.Validate(req.APIKey)
-	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "invalid api key")
+	// API key login (for agents/admin).
+	if strings.TrimSpace(req.APIKey) != "" {
+		rec, ok := h.Keys.Validate(req.APIKey)
+		if !ok {
+			httpx.WriteError(w, http.StatusUnauthorized, "invalid api key")
+			return
+		}
+		tok, exp, err := h.JWT.Sign(Claims{
+			ProjectID: rec.ProjectID,
+			Role:      rec.Role,
+		})
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to sign token")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, tokenResponse{
+			Token:     tok,
+			ExpiresAt: exp.UTC().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// Username/password login (registered user, default has no grants).
+	if h.Users == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "user login not enabled")
+		return
+	}
+	_, role, err := h.Users.Authenticate(req.Username, req.Password, req.ProjectID)
+	if err != nil {
+		// Distinguish invalid credentials vs no grants.
+		if err.Error() == "no grants" {
+			httpx.WriteError(w, http.StatusForbidden, "no grants")
+			return
+		}
+		httpx.WriteError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	tok, exp, err := h.JWT.Sign(Claims{
-		ProjectID: rec.ProjectID,
-		Role:      rec.Role,
+		ProjectID: strings.TrimSpace(req.ProjectID),
+		Role:      role,
 	})
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to sign token")
@@ -122,7 +158,7 @@ func (h Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	raw, rec, err := h.Store.Create(req.ProjectID, req.Role, req.Name)
+	raw, rec, err := h.Keys.Create(req.ProjectID, req.Role, req.Name)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
@@ -136,6 +172,100 @@ func (h Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		"created_at": rec.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	httpx.WriteJSON(w, http.StatusOK, createKeyResponse{APIKey: raw, Key: respKey})
+}
+
+type registerRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type registerResponse struct {
+	User any `json:"user"`
+}
+
+func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
+	if h.Users == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "registration not enabled")
+		return
+	}
+	var req registerRequest
+	if err := httpx.ReadJSON(r, &req, 1<<20); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	u, err := h.Users.Create(req.Username, req.Password)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.Users.Save(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to persist user")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, registerResponse{User: map[string]any{
+		"id":         u.ID,
+		"username":   u.Username,
+		"created_at": u.CreatedAt.UTC().Format(time.RFC3339),
+	}})
+}
+
+type grantRequest struct {
+	User      string `json:"user"` // user_id or username
+	ProjectID string `json:"project_id"`
+	Role      string `json:"role"`
+}
+
+func (h Handler) Grant(w http.ResponseWriter, r *http.Request) {
+	c, ok := ClaimsFromContext(r.Context())
+	if !ok || (c.Role != "admin" && c.Role != "agent") {
+		httpx.WriteError(w, http.StatusForbidden, "agent or admin required")
+		return
+	}
+	if h.Users == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "user store not enabled")
+		return
+	}
+	var req grantRequest
+	if err := httpx.ReadJSON(r, &req, 1<<20); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	u, err := h.Users.Grant(req.User, req.ProjectID, req.Role)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"user": map[string]any{
+			"id":       u.ID,
+			"username": u.Username,
+			"grants":   u.Grants,
+		},
+	})
+}
+
+func (h Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	c, ok := ClaimsFromContext(r.Context())
+	if !ok || (c.Role != "admin" && c.Role != "agent") {
+		httpx.WriteError(w, http.StatusForbidden, "agent or admin required")
+		return
+	}
+	if h.Users == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "user store not enabled")
+		return
+	}
+	users := h.Users.List()
+	out := make([]any, 0, len(users))
+	for _, u := range users {
+		out = append(out, map[string]any{
+			"id":         u.ID,
+			"username":   u.Username,
+			"grants":     u.Grants,
+			"disabled":   u.Disabled,
+			"created_at": u.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"users": out})
 }
 
 func bearerTokenLocal(v string) string {

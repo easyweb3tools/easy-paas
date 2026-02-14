@@ -14,9 +14,38 @@ export type ApiResponse<T> = {
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
+const TOKEN_STORAGE_KEY = "easyweb3.auth_token";
+
 export function apiUrl(path: string) {
   if (API_BASE) return `${API_BASE}${path}`;
   return path;
+}
+
+export function getAuthToken(): string {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
+}
+
+export function setAuthToken(token: string) {
+  if (typeof window === "undefined") return;
+  const v = token.trim();
+  if (!v) {
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    return;
+  }
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, v);
+}
+
+function withAuth(headers: HeadersInit | undefined): HeadersInit {
+  // If caller explicitly sets Authorization, do not override.
+  const token = getAuthToken();
+  if (!token) return headers ?? {};
+
+  const h = new Headers(headers ?? {});
+  if (!h.get("Authorization")) {
+    h.set("Authorization", `Bearer ${token}`);
+  }
+  return h;
 }
 
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
@@ -24,7 +53,7 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<ApiRe
     ...init,
     headers: {
       Accept: "application/json",
-      ...(init?.headers ?? {}),
+      ...withAuth(init?.headers),
     },
   });
   if (!res.ok) {
@@ -48,7 +77,7 @@ export async function apiPost<T>(
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      ...(init?.headers ?? {}),
+      ...withAuth(init?.headers),
     },
     body: payload === undefined ? undefined : JSON.stringify(payload),
   });
@@ -74,7 +103,7 @@ export async function apiPut<T>(
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      ...(init?.headers ?? {}),
+      ...withAuth(init?.headers),
     },
     body: payload === undefined ? undefined : JSON.stringify(payload),
   });
@@ -95,7 +124,7 @@ export async function apiDelete<T>(path: string, init?: RequestInit): Promise<Ap
     ...init,
     headers: {
       Accept: "application/json",
-      ...(init?.headers ?? {}),
+      ...withAuth(init?.headers),
     },
   });
   if (!res.ok) {

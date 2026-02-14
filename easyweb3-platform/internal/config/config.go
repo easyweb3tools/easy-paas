@@ -26,6 +26,7 @@ type Config struct {
 	TokenTTL   time.Duration
 
 	APIKeysFile string
+	UsersFile   string
 	LogsFile    string
 	NotifyFile  string
 
@@ -47,6 +48,7 @@ func Load() (Config, error) {
 		JWTSecret:          []byte(getenv("EASYWEB3_JWT_SECRET", "dev-secret-change-me")),
 		TokenTTL:           mustDuration(getenv("EASYWEB3_TOKEN_TTL", "24h")),
 		APIKeysFile:        getenv("EASYWEB3_API_KEYS_FILE", "./data/api_keys.json"),
+		UsersFile:          getenv("EASYWEB3_USERS_FILE", "./data/users.json"),
 		LogsFile:           getenv("EASYWEB3_LOGS_FILE", "./data/logs.jsonl"),
 		NotifyFile:         getenv("EASYWEB3_NOTIFY_FILE", "./data/notify_config.json"),
 		DexscreenerBaseURL: getenv("EASYWEB3_DEXSCREENER_BASE_URL", "https://api.dexscreener.com"),
