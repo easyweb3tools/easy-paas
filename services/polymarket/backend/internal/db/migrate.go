@@ -35,6 +35,24 @@ func AutoMigrate(db *DB) error {
 	); err != nil {
 		return err
 	}
+
+	// Backward-compatible renames:
+	// GORM's default naming splits "PnL" into "pn_l". We want stable column names:
+	// - realized_pnl
+	// - realized_roi
+	//
+	// If the DB was created before we pinned explicit column names, rename columns.
+	if db.Gorm.Migrator().HasColumn(&models.PnLRecord{}, "realized_pn_l") && !db.Gorm.Migrator().HasColumn(&models.PnLRecord{}, "realized_pnl") {
+		if err := db.Gorm.Migrator().RenameColumn(&models.PnLRecord{}, "realized_pn_l", "realized_pnl"); err != nil {
+			return err
+		}
+	}
+	if db.Gorm.Migrator().HasColumn(&models.PnLRecord{}, "realized_ro_i") && !db.Gorm.Migrator().HasColumn(&models.PnLRecord{}, "realized_roi") {
+		if err := db.Gorm.Migrator().RenameColumn(&models.PnLRecord{}, "realized_ro_i", "realized_roi"); err != nil {
+			return err
+		}
+	}
+
 	if db.Gorm.Migrator().HasColumn(&models.Market{}, "stream_enabled") {
 		if err := db.Gorm.Migrator().DropColumn(&models.Market{}, "stream_enabled"); err != nil {
 			return err

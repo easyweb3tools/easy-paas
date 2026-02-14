@@ -1,6 +1,6 @@
 # easyweb3-platform (v2)
 
-Go implementation of the easyweb3 PaaS MVP described in `v2/ARCHITECTURE.md`.
+Go implementation of the easyweb3 PaaS MVP described in `docs/ARCHITECTURE.md`.
 
 ## MVP Scope Implemented
 

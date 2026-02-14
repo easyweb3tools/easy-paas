@@ -13,8 +13,9 @@ type PnLRecord struct {
 	StrategyName string `gorm:"type:varchar(50);not null;index"`
 
 	ExpectedEdge decimal.Decimal  `gorm:"type:numeric(20,10);not null"`
-	RealizedPnL  *decimal.Decimal `gorm:"type:numeric(30,10)"`
-	RealizedROI  *decimal.Decimal `gorm:"type:numeric(20,10)"`
+	// Use explicit column names because default GORM naming turns "PnL" into "pn_l".
+	RealizedPnL  *decimal.Decimal `gorm:"column:realized_pnl;type:numeric(30,10)"`
+	RealizedROI  *decimal.Decimal `gorm:"column:realized_roi;type:numeric(20,10)"`
 	SlippageLoss *decimal.Decimal `gorm:"type:numeric(30,10)"`
 
 	Outcome       string  `gorm:"type:varchar(20);index"`
