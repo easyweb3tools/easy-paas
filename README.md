@@ -11,6 +11,12 @@ This repo contains the easyweb3 PaaS platform, CLI, onboarded business services,
 - `picoclaw`: PicoClaw upstream (git submodule, built into image at build time)
 - `skills`: PicoClaw skills (one project/service one skill)
 
+## Docs
+
+- Setup / operations: `docs/setup.md`
+- Architecture: `docs/ARCHITECTURE.md`
+- Development plan: `docs/DEVELOPMENT_PLAN.md`
+
 ## Local Compose
 
 A minimal local stack (PaaS + polymarket backend + postgres):
@@ -40,7 +46,7 @@ In this repo, PicoClaw skills live under:
 
 - `skills/<skill-name>/SKILL.md`
 
-The runtime convention described in `ARCHITECTURE.md` is:
+The runtime convention described in `docs/ARCHITECTURE.md` is:
 
 - `<picoclaw-workspace>/skills/<skill-name>/SKILL.md`
 
