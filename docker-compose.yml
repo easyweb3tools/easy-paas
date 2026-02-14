@@ -99,10 +99,13 @@ services:
   polymarket-frontend:
     profiles: ["web"]
     image: ${EASYWEB3_POLYMARKET_FRONTEND_IMAGE:-easyweb3-polymarket-frontend:local}
+    pull_policy: never
     build:
       context: ./services/polymarket/frontend
+    environment:
+      POLYMARKET_BACKEND_INTERNAL_URL: "http://polymarket-backend-web:8080"
     ports:
-      - "18089:80"
+      - "18089:3000"
     depends_on:
       - polymarket-backend-web
 
