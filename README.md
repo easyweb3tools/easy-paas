@@ -21,6 +21,10 @@ PicoClaw (the "brain") is included in compose as an optional profile:
 
 - `docker compose --profile picoclaw up -d`
 
+Polymarket web UI (optional) can be enabled with:
+
+- `docker compose --profile web up -d` (UI at `http://127.0.0.1:18089`)
+
 Ports:
 - PaaS: `http://127.0.0.1:18080`
 - Polymarket backend (direct): `http://127.0.0.1:18088` (should be accessed via PaaS gateway in normal usage)
@@ -67,6 +71,7 @@ On `release/v*` branch updates (e.g. `release/v1.0.0`), it builds and pushes:
 
 - `ghcr.io/<owner>/easyweb3-platform:<version>`
 - `ghcr.io/<owner>/easyweb3-polymarket-backend:<version>`
+- `ghcr.io/<owner>/easyweb3-polymarket-frontend:<version>`
 - `ghcr.io/<owner>/easyweb3-picoclaw:<version>` (e.g. `v1.0.0`)
 - Each image also pushes `:sha-<shortsha>`
 
