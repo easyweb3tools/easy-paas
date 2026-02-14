@@ -57,6 +57,8 @@ This repo vendors upstream PicoClaw in `v2/picoclaw` and provides a build workfl
 
 - `v2/.github/workflows/v2-picoclaw-image.yml`
 
+PicoClaw is included as a git submodule, so the build can pull latest upstream at build time.
+
 On `release/v*` branch updates (e.g. `release/v1.0.0`), it builds and pushes:
 
 - `ghcr.io/<owner>/easyweb3-picoclaw:<version>` (e.g. `v1.0.0`)
