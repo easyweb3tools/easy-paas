@@ -13,7 +13,15 @@ RUN apk add --no-cache git make
 WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN go mod download
+# Upstream may temporarily set an invalid or too-new Go version in go.mod.
+# Patch it here to keep our build toolchain stable.
+RUN set -e; \
+    if grep -qE '^go 1\\.(2[3-9]|[3-9][0-9])\\.' go.mod || grep -qE '^go 1\\.25\\.' go.mod; then \
+      sed -i -E 's/^go 1\\.[0-9]+\\.[0-9]+/go 1.22/' go.mod; \
+    fi; \
+    # If a toolchain line exists for a too-new version, drop it (Go will otherwise insist on it).
+    sed -i -E '/^toolchain go1\\.(2[3-9]|[3-9][0-9])\\./d' go.mod || true; \
+    go mod download
 
 COPY . .
 RUN make build
@@ -32,4 +40,3 @@ RUN mkdir -p /root/.picoclaw/workspace/skills && \
 
 ENTRYPOINT ["picoclaw"]
 CMD ["gateway"]
-

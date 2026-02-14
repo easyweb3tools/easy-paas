@@ -30,10 +30,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Some upstream commits may accidentally set a non-existent Go version.
-          # We keep v2 toolchain on Go 1.22 for now.
-          if grep -qE '^go 1\\.25' picoclaw/go.mod; then
-            sed -i 's/^go 1\\.25\\..*/go 1.22/' picoclaw/go.mod
+          # Some upstream commits may accidentally set a non-existent or too-new Go version.
+          # We keep v2 toolchain on Go 1.22 for now (we also enforce in picoclaw.Dockerfile).
+          req="$(awk '/^go /{print $2; exit}' picoclaw/go.mod || true)"
+          if [[ -n "${req}" && "${req}" =~ ^1\\.([0-9]+)\\. ]]; then
+            minor="${BASH_REMATCH[1]}"
+            if [[ "${minor}" -gt 22 ]]; then
+              sed -i -E 's/^go 1\\.[0-9]+\\.[0-9]+/go 1.22/' picoclaw/go.mod
+              sed -i -E '/^toolchain go1\\.(2[3-9]|[3-9][0-9])\\./d' picoclaw/go.mod || true
+            fi
           fi
 
       - name: Compute Image Tags
