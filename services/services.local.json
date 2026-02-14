@@ -1,0 +1,7 @@
+{
+  "polymarket": {
+    "base_url": "http://polymarket-backend:8080",
+    "health_path": "/healthz",
+    "docs_path": "/docs"
+  }
+}

@@ -1,0 +1,76 @@
+services:
+  easyweb3-platform:
+    build:
+      context: ./easyweb3-platform
+    environment:
+      EASYWEB3_LISTEN: ":8080"
+      EASYWEB3_JWT_SECRET: "dev-secret-change-me-please"
+      EASYWEB3_BOOTSTRAP_ADMIN_API_KEY: "ew3_admin_dev"
+
+      # Register services via file (mounted below)
+      EASYWEB3_SERVICES_FILE: "/etc/easyweb3/services.json"
+
+      # Cache (optional)
+      EASYWEB3_CACHE_BACKEND: "memory"
+      EASYWEB3_CACHE_DEFAULT_TTL: "30s"
+
+      # Notify / logs / keys (persisted in container FS by default)
+      EASYWEB3_API_KEYS_FILE: "/data/api_keys.json"
+      EASYWEB3_LOGS_FILE: "/data/logs.jsonl"
+      EASYWEB3_NOTIFY_FILE: "/data/notify_config.json"
+
+      # Integrations (use real endpoints by default)
+      EASYWEB3_DEXSCREENER_BASE_URL: "https://api.dexscreener.com"
+      EASYWEB3_GOPLUS_BASE_URL: "https://api.gopluslabs.io"
+      EASYWEB3_GOPLUS_API_KEY: ""
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./services/services.local.json:/etc/easyweb3/services.json:ro
+      - easyweb3_platform_data:/data
+
+  polymarket-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: polymarket
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - polymarket_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d polymarket"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  polymarket-backend:
+    build:
+      context: ./services/polymarket/backend
+    environment:
+      PM_ENV_ONLY: "false"
+      PM_CONFIG: "/app/config/docker.yaml"
+      PM_APP_ENV: "dev"
+      PM_SERVER_HTTP_ADDR: ":8080"
+
+      # SaaS inbound auth
+      PM_AUTH_DISABLED: "false"
+      PM_REQUIRE_GATEWAY: "true"
+
+      # Outbound to PaaS logging (MVP: using bootstrap admin key)
+      EASYWEB3_API_BASE: "http://easyweb3-platform:8080"
+      EASYWEB3_API_KEY: "ew3_admin_dev"
+
+      PM_PAAS_AGENT: "polymarket-service"
+    depends_on:
+      polymarket-db:
+        condition: service_healthy
+    ports:
+      - "18088:8080"
+    volumes:
+      - ./services/polymarket/backend/config/docker.yaml:/app/config/docker.yaml:ro
+
+volumes:
+  polymarket_pgdata:
+  easyweb3_platform_data:

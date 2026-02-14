@@ -1,0 +1,131 @@
+app:
+  env: dev
+server:
+  http_addr: ":8080"
+log:
+  level: info
+  encoding: console
+  development: true
+  sampling: false
+  disable_caller: false
+  disable_stacktrace: false
+db:
+  dsn: "host=localhost user=postgres password=postgres dbname=polymarket sslmode=disable"
+  max_open_conns: 20
+  max_idle_conns: 5
+  conn_max_lifetime: "30m"
+  conn_max_idle_time: "5m"
+  timezone: "UTC"
+cron:
+  enabled: true
+  catalog_sync: "@every 1m"
+gamma:
+  base_url: "https://gamma-api.polymarket.com"
+  timeout: "15s"
+catalog_sync:
+  scope: "all"
+  page_limit: 200
+  max_pages: 5
+  resume: true
+  tag_id: 0
+  closed: "open"
+  book_max_assets: 200
+  book_batch_size: 20
+  book_sleep_per_batch: "3s"
+  candidate_max_markets: 2000
+  candidate_min_markets: 2
+  candidate_min_liquidity: 0
+  candidate_min_volume: 0
+  candidate_top_n: 50
+clob_stream:
+  url: "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+  refresh_interval: "30s"
+  max_assets: 200
+clob_rest:
+  base_url: "https://clob.polymarket.com"
+  timeout: "15s"
+
+# === V2 additions (docs/architecture-v2.md) ===
+strategy_engine:
+  enabled: false
+  scan_interval: "5s"
+  max_opportunities: 100
+
+signal_sources:
+  binance_ws:
+    enabled: false
+    url: "wss://stream.binance.com:9443/ws/btcusdt@depth20@100ms"
+    symbol: "BTCUSDT"
+  binance_price:
+    enabled: false
+    endpoint: "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+    poll_interval: "2s"
+    window_seconds: 300
+    trigger_pct: 2.0
+  weather_api:
+    enabled: false
+    sources: []
+    cities: []
+  news_rss:
+    enabled: false
+    poll_interval: "2m"
+    feeds: []
+    keywords: []
+  price_change:
+    enabled: false
+    interval: "5s"
+    min_jump_bps: 500
+    max_spread_bps: 400
+    limit: 50
+  orderbook_pattern:
+    enabled: false
+    interval: "10s"
+    min_spread_bps: 400
+    min_jump_bps: 600
+    limit: 100
+  certainty_sweep:
+    enabled: false
+    interval: "30s"
+    hours_to_expiry: 6
+    limit: 50
+
+risk:
+  max_total_exposure_usd: 5000
+  max_per_market_usd: 500
+  max_per_strategy_usd: 2000
+  max_daily_loss_usd: 500
+  kelly_fraction_cap: 0.06
+  default_kelly_fraction: 0.06
+  min_data_freshness_ms: 5000
+  stale_data_action: "warn"
+  require_preflight_pass: false
+
+labeler:
+  enabled: false
+  scan_interval: "5m"
+
+settlement_ingest:
+  enabled: false
+  scan_interval: "6h"
+  lookback_days: 14
+  batch_size: 200
+
+# Strategy defaults are applied only when the strategy row is first created.
+strategy_defaults:
+  arb_sum:
+    enabled: true
+  systematic_no:
+    enabled: true
+  pre_market_fdv:
+    enabled: false
+arbitrage:
+  enabled: true
+  scan_interval: "15s"
+  max_events: 2000
+  min_markets: 2
+  min_liquidity: 0
+  min_gross_profit: 0.01
+  min_net_profit: 0.005
+  fee_rate: 0.02
+  max_data_age_sec: 60
+  top_n: 100

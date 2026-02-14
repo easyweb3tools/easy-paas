@@ -1,0 +1,64 @@
+package polymarketgamma
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+)
+
+// Client is a client for the Gamma API (events and markets metadata)
+type Client struct {
+	host       string
+	httpClient *http.Client
+}
+
+// NewClient creates a new Gamma API client for querying events and market metadata
+func NewClient(httpClient *http.Client) *Client {
+	return &Client{
+		host:       GammaAPIURL,
+		httpClient: httpClient,
+	}
+}
+
+// NewClientWithHost creates a new Gamma API client with a custom base URL
+func NewClientWithHost(httpClient *http.Client, host string) *Client {
+	if host == "" {
+		host = GammaAPIURL
+	}
+	host = strings.TrimRight(host, "/")
+	return &Client{
+		host:       host,
+		httpClient: httpClient,
+	}
+}
+
+// doRequest performs an HTTP request to the Gamma API
+func (c *Client) doRequest(ctx context.Context, method, path string) ([]byte, error) {
+	fullURL := c.host + path
+
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	return body, nil
+}

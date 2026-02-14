@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  --bg: #f9fafb;
+  --surface: rgba(255, 255, 255, 0.75);
+  --surface-strong: rgba(255, 255, 255, 0.9);
+  --glass: rgba(255, 255, 255, 0.65);
+  --border: rgba(15, 23, 42, 0.08);
+  --text: #0f172a;
+  --muted: rgba(15, 23, 42, 0.55);
+  --shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+  --glow: 0 0 0 rgba(0, 0, 0, 0);
+}
+
+.dark {
+  --bg: #0b0d11;
+  --surface: rgba(15, 18, 24, 0.7);
+  --surface-strong: rgba(15, 18, 24, 0.9);
+  --glass: rgba(8, 10, 14, 0.7);
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #f8fafc;
+  --muted: rgba(248, 250, 252, 0.55);
+  --shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+  --glow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", sans-serif;
+}
+
+.glass-panel {
+  position: relative;
+}
+
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.glass-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dark .glass-panel::before {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+  opacity: 0.55;
+}
+
+.dark .glass-panel::after {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.08);
+}

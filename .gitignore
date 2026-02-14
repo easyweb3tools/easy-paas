@@ -1,0 +1,29 @@
+# Go
+**/bin/
+**/build/
+**/*.test
+
+# Node / Next.js
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+
+# Env / secrets
+**/.env
+**/.env.*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Logs / temp
+**/*.log
+tmp/
+/tmp/
+
+# Easyweb3 runtime state
+**/.easyweb3/
+**/.picoclaw/
+

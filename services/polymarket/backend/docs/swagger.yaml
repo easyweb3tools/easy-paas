@@ -1,0 +1,258 @@
+definitions:
+  handler.apiResponse:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+      meta:
+        additionalProperties: {}
+        type: object
+    type: object
+info:
+  contact: {}
+paths:
+  /api/catalog/events:
+    get:
+      parameters:
+      - description: limit
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      - description: active
+        in: query
+        name: active
+        type: boolean
+      - description: closed
+        in: query
+        name: closed
+        type: boolean
+      - description: slug
+        in: query
+        name: slug
+        type: string
+      - description: title
+        in: query
+        name: title
+        type: string
+      - description: order by field
+        in: query
+        name: order_by
+        type: string
+      - description: ascending
+        in: query
+        name: ascending
+        type: boolean
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.apiResponse'
+      summary: List events
+      tags:
+      - catalog
+  /api/catalog/events/realtime:
+    get:
+      parameters:
+      - description: event slug
+        in: query
+        name: slug
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.apiResponse'
+      summary: Get realtime data for an event by slug
+      tags:
+      - catalog
+  /api/catalog/markets:
+    get:
+      parameters:
+      - description: limit
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      - description: active
+        in: query
+        name: active
+        type: boolean
+      - description: closed
+        in: query
+        name: closed
+        type: boolean
+      - description: event id
+        in: query
+        name: event_id
+        type: string
+      - description: slug
+        in: query
+        name: slug
+        type: string
+      - description: question contains
+        in: query
+        name: question
+        type: string
+      - description: order by field
+        in: query
+        name: order_by
+        type: string
+      - description: ascending
+        in: query
+        name: ascending
+        type: boolean
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.apiResponse'
+      summary: List markets
+      tags:
+      - catalog
+  /api/catalog/markets/realtime:
+    get:
+      parameters:
+      - description: market slug
+        in: query
+        name: slug
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.apiResponse'
+      summary: Get realtime data for a market by slug
+      tags:
+      - catalog
+  /api/catalog/sync:
+    post:
+      parameters:
+      - description: sync scope (events|markets|series|tags|all)
+        in: query
+        name: scope
+        type: string
+      - description: page size
+        in: query
+        name: limit
+        type: integer
+      - description: max pages
+        in: query
+        name: max_pages
+        type: integer
+      - description: resume from cursor
+        in: query
+        name: resume
+        type: boolean
+      - description: tag id
+        in: query
+        name: tag_id
+        type: integer
+      - description: open|closed
+        in: query
+        name: closed
+        type: string
+      - description: max assets for /book resync
+        in: query
+        name: book_max_assets
+        type: integer
+      - description: batch size for /book resync
+        in: query
+        name: book_batch_size
+        type: integer
+      - description: sleep per batch (e.g. 2s)
+        in: query
+        name: book_sleep_per_batch
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.apiResponse'
+      summary: Run catalog sync
+      tags:
+      - catalog
+  /api/catalog/sync-state:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.apiResponse'
+      summary: List sync states
+      tags:
+      - catalog
+  /api/catalog/tokens:
+    get:
+      parameters:
+      - description: limit
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      - description: market id
+        in: query
+        name: market_id
+        type: string
+      - description: outcome
+        in: query
+        name: outcome
+        type: string
+      - description: side
+        in: query
+        name: side
+        type: string
+      - description: order by field
+        in: query
+        name: order_by
+        type: string
+      - description: ascending
+        in: query
+        name: ascending
+        type: boolean
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.apiResponse'
+      summary: List tokens
+      tags:
+      - catalog
+  /healthz:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /readyz:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Readiness check
+      tags:
+      - health
+swagger: "2.0"

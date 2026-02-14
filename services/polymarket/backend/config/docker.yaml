@@ -1,0 +1,11 @@
+app:
+  env: dev
+server:
+  http_addr: ":8080"
+db:
+  dsn: "host=polymarket-db user=postgres password=postgres dbname=polymarket sslmode=disable"
+  timezone: "UTC"
+cron:
+  enabled: true
+  catalog_sync: "@every 1m"
+# Keep defaults for everything else (viper defaults + file values)
