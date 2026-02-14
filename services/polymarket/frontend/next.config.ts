@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
-const BACKEND_INTERNAL = process.env.POLYMARKET_BACKEND_INTERNAL_URL ?? "http://polymarket-backend-web:8080";
+// The web UI should only talk to easyweb3-platform (PaaS gateway).
+// easyweb3-platform then proxies to polymarket-backend via /api/v1/services/polymarket/*.
+const PLATFORM_INTERNAL = process.env.EASYWEB3_PLATFORM_INTERNAL_URL ?? "http://easyweb3-platform:8080";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -14,14 +16,19 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
-      // Browser fetches /api/v2/* to same-origin. Next server proxies to backend inside docker network.
+      // Browser fetches /api/v2/* to same-origin. Next server proxies to PaaS gateway inside docker network.
       {
         source: "/api/v2/:path*",
-        destination: `${BACKEND_INTERNAL}/api/v2/:path*`,
+        destination: `${PLATFORM_INTERNAL}/api/v1/services/polymarket/api/v2/:path*`,
+      },
+      // Allow UI to call platform APIs (auth/logs/etc) using same-origin /api/v1/*.
+      {
+        source: "/api/v1/:path*",
+        destination: `${PLATFORM_INTERNAL}/api/v1/:path*`,
       },
       {
         source: "/healthz",
-        destination: `${BACKEND_INTERNAL}/healthz`,
+        destination: `${PLATFORM_INTERNAL}/healthz`,
       },
     ];
   },

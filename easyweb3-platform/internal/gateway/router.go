@@ -41,6 +41,14 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.Auth.Login(w, r)
 		return
 	}
+	if r.URL.Path == "/api/v1/auth/register" {
+		if r.Method != http.MethodPost {
+			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		rt.Auth.Register(w, r)
+		return
+	}
 	if r.URL.Path == "/api/v1/auth/status" {
 		if r.Method != http.MethodGet {
 			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -65,15 +73,31 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.requireAuth(http.HandlerFunc(rt.Auth.CreateKey)).ServeHTTP(w, r)
 		return
 	}
+	if r.URL.Path == "/api/v1/auth/grants" {
+		if r.Method != http.MethodPost {
+			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		rt.requireAuth(http.HandlerFunc(rt.Auth.Grant)).ServeHTTP(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/auth/users" {
+		if r.Method != http.MethodGet {
+			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		rt.requireAuth(http.HandlerFunc(rt.Auth.ListUsers)).ServeHTTP(w, r)
+		return
+	}
 
 	// Logging.
 	if r.URL.Path == "/api/v1/logs" {
 		switch r.Method {
 		case http.MethodPost:
-			rt.requireAuth(http.HandlerFunc(rt.Logs.Create)).ServeHTTP(w, r)
+			rt.requireAuth(rt.requireRole(http.HandlerFunc(rt.Logs.Create), "agent", "admin")).ServeHTTP(w, r)
 			return
 		case http.MethodGet:
-			rt.requireAuth(http.HandlerFunc(rt.Logs.List)).ServeHTTP(w, r)
+			rt.requireAuth(rt.requireRole(http.HandlerFunc(rt.Logs.List), "viewer", "agent", "admin")).ServeHTTP(w, r)
 			return
 		default:
 			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -85,7 +109,7 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		rt.requireAuth(http.HandlerFunc(rt.Logs.Stats)).ServeHTTP(w, r)
+		rt.requireAuth(rt.requireRole(http.HandlerFunc(rt.Logs.Stats), "viewer", "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/v1/logs/") {
@@ -98,9 +122,9 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusNotFound, "not found")
 			return
 		}
-		rt.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rt.requireAuth(rt.requireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rt.Logs.Get(w, r, id)
-		})).ServeHTTP(w, r)
+		}), "viewer", "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 
@@ -110,7 +134,7 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		rt.requireAuth(http.HandlerFunc(rt.Notify.Send)).ServeHTTP(w, r)
+		rt.requireAuth(rt.requireRole(http.HandlerFunc(rt.Notify.Send), "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path == "/api/v1/notify/broadcast" {
@@ -118,16 +142,16 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		rt.requireAuth(http.HandlerFunc(rt.Notify.Broadcast)).ServeHTTP(w, r)
+		rt.requireAuth(rt.requireRole(http.HandlerFunc(rt.Notify.Broadcast), "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path == "/api/v1/notify/config" {
 		switch r.Method {
 		case http.MethodGet:
-			rt.requireAuth(http.HandlerFunc(rt.Notify.GetConfig)).ServeHTTP(w, r)
+			rt.requireAuth(rt.requireRole(http.HandlerFunc(rt.Notify.GetConfig), "agent", "admin")).ServeHTTP(w, r)
 			return
 		case http.MethodPut:
-			rt.requireAuth(http.HandlerFunc(rt.Notify.PutConfig)).ServeHTTP(w, r)
+			rt.requireAuth(rt.requireRole(http.HandlerFunc(rt.Notify.PutConfig), "agent", "admin")).ServeHTTP(w, r)
 			return
 		default:
 			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -146,9 +170,9 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusNotFound, "not found")
 			return
 		}
-		rt.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rt.requireAuth(rt.requireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rt.Integrations.Query(w, r, provider)
-		})).ServeHTTP(w, r)
+		}), "viewer", "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 
@@ -167,11 +191,17 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodGet:
-				rt.Cache.Get(w, r, key)
+				rt.requireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					rt.Cache.Get(w, r, key)
+				}), "viewer", "agent", "admin").ServeHTTP(w, r)
 			case http.MethodPut:
-				rt.Cache.Put(w, r, key)
+				rt.requireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					rt.Cache.Put(w, r, key)
+				}), "agent", "admin").ServeHTTP(w, r)
 			case http.MethodDelete:
-				rt.Cache.Delete(w, r, key)
+				rt.requireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					rt.Cache.Delete(w, r, key)
+				}), "agent", "admin").ServeHTTP(w, r)
 			}
 		})).ServeHTTP(w, r)
 		return
@@ -183,7 +213,7 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		rt.requireAuth(http.HandlerFunc(rt.Service.List)).ServeHTTP(w, r)
+		rt.requireAuth(rt.requireRole(http.HandlerFunc(rt.Service.List), "viewer", "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path == "/api/v1/service/health" {
@@ -196,9 +226,9 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusBadRequest, "name required")
 			return
 		}
-		rt.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rt.requireAuth(rt.requireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rt.Service.Health(w, r, name)
-		})).ServeHTTP(w, r)
+		}), "viewer", "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 	if r.URL.Path == "/api/v1/service/docs" {
@@ -211,15 +241,20 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusBadRequest, "name required")
 			return
 		}
-		rt.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rt.requireAuth(rt.requireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rt.Service.Docs(w, r, name)
-		})).ServeHTTP(w, r)
+		}), "viewer", "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 
 	// Proxy business services.
 	if strings.HasPrefix(r.URL.Path, "/api/v1/services/") {
-		rt.requireAuth(rt.Proxy).ServeHTTP(w, r)
+		// Viewer can only read. Agent/admin can write.
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			rt.requireAuth(rt.requireRole(rt.Proxy, "viewer", "agent", "admin")).ServeHTTP(w, r)
+			return
+		}
+		rt.requireAuth(rt.requireRole(rt.Proxy, "agent", "admin")).ServeHTTP(w, r)
 		return
 	}
 
@@ -231,6 +266,26 @@ func (rt Router) requireAuth(h http.Handler) http.Handler {
 		return h
 	}
 	return rt.AuthMW(h)
+}
+
+func (rt Router) requireRole(h http.Handler, roles ...string) http.Handler {
+	allowed := map[string]bool{}
+	for _, r := range roles {
+		allowed[strings.TrimSpace(strings.ToLower(r))] = true
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, ok := auth.ClaimsFromContext(r.Context())
+		if !ok {
+			httpx.WriteError(w, http.StatusUnauthorized, "missing token")
+			return
+		}
+		role := strings.ToLower(strings.TrimSpace(c.Role))
+		if !allowed[role] {
+			httpx.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func parseIntegrationProvider(path string) (provider string, ok bool) {
