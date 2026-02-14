@@ -25,6 +25,13 @@ RUN set -e; \
 
 COPY picoclaw/ ./
 RUN make build
+# Export builtin skills to a stable path for the final image.
+# Some CI checkouts / submodule states may not include the skills directory.
+RUN set -e; \
+    mkdir -p /out/picoclaw_skills; \
+    if [ -d /src/picoclaw/skills ]; then \
+      cp -R /src/picoclaw/skills/* /out/picoclaw_skills/ 2>/dev/null || true; \
+    fi
 
 FROM golang:1.22-alpine AS easyweb3_cli_build
 
@@ -43,7 +50,7 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=picoclaw_build /src/picoclaw/build/picoclaw /usr/local/bin/picoclaw
-COPY --from=picoclaw_build /src/picoclaw/skills /opt/picoclaw/skills
+COPY --from=picoclaw_build /out/picoclaw_skills /opt/picoclaw/skills
 COPY --from=easyweb3_cli_build /out/easyweb3 /usr/local/bin/easyweb3
 
 COPY picoclaw-entrypoint.sh /entrypoint.sh
@@ -53,4 +60,3 @@ ENV HOME=/root
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gateway"]
-
