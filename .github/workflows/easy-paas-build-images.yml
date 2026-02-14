@@ -1,4 +1,4 @@
-name: v2-picoclaw-image
+name: easy-paas-build-images
 
 on:
   push:
@@ -12,21 +12,38 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: easyweb3-platform
+            image: easyweb3-platform
+            context: ./easyweb3-platform
+            dockerfile: ./easyweb3-platform/Dockerfile
+          - name: polymarket-backend
+            image: easyweb3-polymarket-backend
+            context: ./services/polymarket/backend
+            dockerfile: ./services/polymarket/backend/Dockerfile
+          - name: picoclaw
+            image: easyweb3-picoclaw
+            context: .
+            dockerfile: ./picoclaw.Dockerfile
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Update PicoClaw Submodule To Latest
+      - name: Update Submodules To Latest (For Build)
         shell: bash
         run: |
           set -euo pipefail
           git submodule sync --recursive
-          # Build should use latest upstream code, not the pinned gitlink commit.
+          # For this repo, we intentionally build with latest upstream picoclaw code.
           git submodule update --init --recursive --remote --depth 1
 
-      - name: Compute Image Tags
+      - name: Compute Version Tag
         id: vars
         shell: bash
         run: |
@@ -38,7 +55,7 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER}/easyweb3-picoclaw" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER}" >> "$GITHUB_OUTPUT"
 
       - name: Set Up QEMU
         uses: docker/setup-qemu-action@v3
@@ -57,16 +74,16 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.vars.outputs.image }}
+          images: ghcr.io/${{ steps.vars.outputs.owner }}/${{ matrix.image }}
           tags: |
             type=raw,value=${{ steps.vars.outputs.version }}
             type=sha,format=short
 
-      - name: Build And Push
+      - name: Build And Push (${{ matrix.name }})
         uses: docker/build-push-action@v6
         with:
-          context: ./picoclaw
-          file: ./picoclaw.Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
