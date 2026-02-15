@@ -260,7 +260,16 @@ func apiPolymarketCmd(ctx Context, args []string) error {
 
 func polymarketDo(ctx Context, method, path string, body any) error {
 	route := "/api/v1/services/polymarket" + path
-	c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+	tok := strings.TrimSpace(ctx.Token)
+	m := strings.ToUpper(strings.TrimSpace(method))
+	if tok == "" && (m == http.MethodPost || m == http.MethodPut || m == http.MethodPatch || m == http.MethodDelete) {
+		ensured, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		tok = ensured
+	}
+	c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 	req, err := c.NewRequest(method, route, body)
 	if err != nil {
 		return err

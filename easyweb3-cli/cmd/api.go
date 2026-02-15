@@ -45,7 +45,15 @@ func apiCmd(ctx Context, args []string) error {
 		// Route through platform gateway.
 		route := fmt.Sprintf("/api/v1/services/%s%s", strings.TrimSpace(*service), p)
 
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok := strings.TrimSpace(ctx.Token)
+		if tok == "" && (m == http.MethodPost || m == http.MethodPut || m == http.MethodPatch || m == http.MethodDelete) {
+			ensured, err := ensureBearerToken(ctx)
+			if err != nil {
+				return err
+			}
+			tok = ensured
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		var req *http.Request
 		var err error
 		if strings.TrimSpace(*body) == "" {

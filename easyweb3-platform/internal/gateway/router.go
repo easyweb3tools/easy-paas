@@ -10,6 +10,7 @@ import (
 	"github.com/nicekwell/easyweb3-platform/internal/integration"
 	"github.com/nicekwell/easyweb3-platform/internal/logging"
 	"github.com/nicekwell/easyweb3-platform/internal/notification"
+	"github.com/nicekwell/easyweb3-platform/internal/publicdocs"
 	"github.com/nicekwell/easyweb3-platform/internal/service"
 )
 
@@ -21,6 +22,7 @@ type Router struct {
 	Cache        cache.Handler
 	Service      service.Handler
 	Proxy        *Proxy
+	Docs         publicdocs.Handler
 
 	AuthMW func(http.Handler) http.Handler
 }
@@ -29,6 +31,20 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Health.
 	if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+		return
+	}
+
+	// Public docs (no auth).
+	if r.URL.Path == "/docs" || r.URL.Path == "/docs/" {
+		rt.Docs.Index(w, r)
+		return
+	}
+	if r.URL.Path == "/docs/architecture" {
+		rt.Docs.Architecture(w, r)
+		return
+	}
+	if r.URL.Path == "/docs/picoclaw" {
+		rt.Docs.PicoClaw(w, r)
 		return
 	}
 

@@ -23,6 +23,9 @@ services:
       # Register services via file (mounted below)
       EASYWEB3_SERVICES_FILE: "/etc/easyweb3/services.json"
 
+      # Public docs (mounted below)
+      EASYWEB3_DOCS_DIR: "/etc/easyweb3/public-docs"
+
       # Cache (optional)
       EASYWEB3_CACHE_BACKEND: "memory"
       EASYWEB3_CACHE_DEFAULT_TTL: "30s"
@@ -40,6 +43,7 @@ services:
       - "18080:8080"
     volumes:
       - ./services/services.local.json:/etc/easyweb3/services.json:ro
+      - ./docs:/etc/easyweb3/public-docs:ro
       - easyweb3_platform_data:/data
 
   polymarket-db:

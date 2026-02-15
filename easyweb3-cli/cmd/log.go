@@ -50,7 +50,11 @@ func logCmd(ctx Context, args []string) error {
 			return errors.New("--details must be valid json")
 		}
 
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		reqBody := createLogRequest{
 			Agent:      strings.TrimSpace(*agent),
 			Action:     strings.TrimSpace(*action),
@@ -85,7 +89,11 @@ func logCmd(ctx Context, args []string) error {
 			q += "&level=" + urlQueryEscape(strings.TrimSpace(*level))
 		}
 
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("GET", "/api/v1/logs"+q, nil)
 		if err != nil {
 			return err
@@ -104,7 +112,11 @@ func logCmd(ctx Context, args []string) error {
 		if id == "" {
 			return errors.New("id required")
 		}
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("GET", "/api/v1/logs/"+id, nil)
 		if err != nil {
 			return err

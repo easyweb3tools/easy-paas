@@ -16,6 +16,7 @@ import (
 	"github.com/nicekwell/easyweb3-platform/internal/integration"
 	"github.com/nicekwell/easyweb3-platform/internal/logging"
 	"github.com/nicekwell/easyweb3-platform/internal/notification"
+	"github.com/nicekwell/easyweb3-platform/internal/publicdocs"
 	"github.com/nicekwell/easyweb3-platform/internal/service"
 	"github.com/redis/go-redis/v9"
 )
@@ -50,8 +51,9 @@ func main() {
 	}
 
 	integrationHandler := integration.Handler{
-		Dex:    integration.Dexscreener{BaseURL: cfg.DexscreenerBaseURL, TTL: cfg.CacheDefaultTTL},
-		GoPlus: integration.GoPlus{BaseURL: cfg.GoPlusBaseURL, APIKey: cfg.GoPlusAPIKey, TTL: cfg.CacheDefaultTTL},
+		Dex:        integration.Dexscreener{BaseURL: cfg.DexscreenerBaseURL, TTL: cfg.CacheDefaultTTL},
+		GoPlus:     integration.GoPlus{BaseURL: cfg.GoPlusBaseURL, APIKey: cfg.GoPlusAPIKey, TTL: cfg.CacheDefaultTTL},
+		Polymarket: integration.Polymarket{BaseURL: cfg.Services["polymarket"].BaseURL, TTL: cfg.CacheDefaultTTL},
 	}
 
 	var cacheStore cache.Store
@@ -78,6 +80,7 @@ func main() {
 	// Wire cache into integration (best-effort).
 	integrationHandler.Dex.Cache = cacheStore
 	integrationHandler.GoPlus.Cache = cacheStore
+	integrationHandler.Polymarket.Cache = cacheStore
 
 	proxy := gateway.NewProxy(cfg.Services)
 
@@ -92,6 +95,7 @@ func main() {
 		Cache:        cacheHandler,
 		Service:      serviceHandler,
 		Proxy:        proxy,
+		Docs:         publicdocs.Handler{Dir: cfg.DocsDir},
 		AuthMW:       auth.Middleware(jwt),
 	}
 
