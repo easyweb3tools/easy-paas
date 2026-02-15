@@ -17,18 +17,25 @@ RUN go mod download
 COPY easyweb3-cli/ ./
 RUN CGO_ENABLED=0 go build -o /out/easyweb3 .
 
-FROM node:22-alpine AS openclaw_build
+# NOTE: OpenClaw's npm dependencies include native modules (e.g. node-llama-cpp).
+# Alpine (musl) often forces source builds and can fail without heavy toolchains.
+# Use Debian-based Node to prefer prebuilt binaries and improve reliability.
+FROM node:22-bookworm-slim AS openclaw_build
 
 ARG OPENCLAW_VERSION=latest
 
-RUN apk add --no-cache ca-certificates tzdata curl python3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata curl python3 git \
+  && rm -rf /var/lib/apt/lists/*
 
 # Install OpenClaw CLI from npm.
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
-RUN apk add --no-cache ca-certificates tzdata curl python3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata curl python3 \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=openclaw_build /usr/local/bin/openclaw /usr/local/bin/openclaw
 COPY --from=openclaw_build /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -38,6 +45,12 @@ COPY --from=easyweb3_cli_build /out/easyweb3 /usr/local/bin/easyweb3
 COPY openclaw-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# npm's generated bin shim uses relative imports from its own location, which breaks when
+# copied across stages. Provide a stable wrapper that runs the actual package entry.
+RUN rm -f /usr/local/bin/openclaw && \
+  printf '%s\n' '#!/bin/sh' 'exec node /usr/local/lib/node_modules/openclaw/openclaw.mjs "$@"' > /usr/local/bin/openclaw && \
+  chmod +x /usr/local/bin/openclaw
+
 ENV HOME=/root
 
 ENTRYPOINT ["/entrypoint.sh"]
@@ -46,4 +59,3 @@ ENTRYPOINT ["/entrypoint.sh"]
 # You likely want to pass:
 #   openclaw gateway --dev --allow-unconfigured --bind loopback --port 18789
 CMD ["gateway", "--dev", "--allow-unconfigured", "--bind", "loopback", "--port", "18789"]
-
