@@ -29,9 +29,10 @@ Commands:
   auth     login/register/grant/refresh/status
   log      create/list/get
   notify   send/broadcast/config
-  integrations query
+  integrations query|polymarket
   cache    get/put/delete
   api      raw
+  docs     url/get (public docs)
   service  list/health/docs
 `)
 }
@@ -54,6 +55,8 @@ func Dispatch(ctx Context, args []string) error {
 		return cacheCmd(ctx, args[1:])
 	case "api":
 		return apiCmd(ctx, args[1:])
+	case "docs":
+		return docsCmd(ctx, args[1:])
 	case "service":
 		return serviceCmd(ctx, args[1:])
 	case "help", "-h", "--help":

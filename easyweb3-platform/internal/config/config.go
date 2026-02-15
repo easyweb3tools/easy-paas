@@ -29,6 +29,7 @@ type Config struct {
 	UsersFile   string
 	LogsFile    string
 	NotifyFile  string
+	DocsDir     string
 
 	DexscreenerBaseURL string
 	GoPlusBaseURL      string
@@ -51,6 +52,7 @@ func Load() (Config, error) {
 		UsersFile:          getenv("EASYWEB3_USERS_FILE", "./data/users.json"),
 		LogsFile:           getenv("EASYWEB3_LOGS_FILE", "./data/logs.jsonl"),
 		NotifyFile:         getenv("EASYWEB3_NOTIFY_FILE", "./data/notify_config.json"),
+		DocsDir:            strings.TrimSpace(getenv("EASYWEB3_DOCS_DIR", "")),
 		DexscreenerBaseURL: getenv("EASYWEB3_DEXSCREENER_BASE_URL", "https://api.dexscreener.com"),
 		GoPlusBaseURL:      getenv("EASYWEB3_GOPLUS_BASE_URL", "https://api.gopluslabs.io"),
 		GoPlusAPIKey:       getenv("EASYWEB3_GOPLUS_API_KEY", ""),

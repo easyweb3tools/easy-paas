@@ -19,7 +19,11 @@ func serviceCmd(ctx Context, args []string) error {
 	}
 	switch args[0] {
 	case "list":
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("GET", "/api/v1/service/list", nil)
 		if err != nil {
 			return err
@@ -39,7 +43,11 @@ func serviceCmd(ctx Context, args []string) error {
 			return errors.New("--name required")
 		}
 		path := "/api/v1/service/health?name=" + urlQueryEscape(strings.TrimSpace(*name))
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("GET", path, nil)
 		if err != nil {
 			return err
@@ -61,13 +69,17 @@ func serviceCmd(ctx Context, args []string) error {
 
 		// Docs are markdown, so bypass JSON unmarshal.
 		path := "/api/v1/service/docs?name=" + urlQueryEscape(strings.TrimSpace(*name))
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
 		hc := &http.Client{}
 		url := strings.TrimRight(ctx.APIBase, "/") + path
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return err
 		}
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(ctx.Token))
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(tok))
 		resp, err := hc.Do(req)
 		if err != nil {
 			return err

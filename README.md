@@ -15,6 +15,7 @@ This repo contains the easyweb3 PaaS platform, CLI, onboarded business services,
 
 - Setup / operations: `docs/setup.md`
 - Architecture: `docs/ARCHITECTURE.md`
+- PicoClaw role: `docs/PICOCLAW.md`
 - Development plan: `docs/DEVELOPMENT_PLAN.md`
 
 ## Local Compose

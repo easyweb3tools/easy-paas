@@ -13,8 +13,9 @@ import (
 )
 
 type Handler struct {
-	Dex    Dexscreener
-	GoPlus GoPlus
+	Dex        Dexscreener
+	GoPlus     GoPlus
+	Polymarket Polymarket
 }
 
 type QueryRequest struct {
@@ -43,8 +44,12 @@ func (h Handler) Query(w http.ResponseWriter, r *http.Request, provider string) 
 		req.Params = map[string]any{}
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
+	ctx = withBearer(ctx, r.Header.Get("Authorization"))
+	if c, ok := auth.ClaimsFromContext(r.Context()); ok {
+		ctx = withClaims(ctx, c.ProjectID, c.Role)
+	}
 
 	var out json.RawMessage
 	var err error
@@ -53,6 +58,8 @@ func (h Handler) Query(w http.ResponseWriter, r *http.Request, provider string) 
 		out, err = h.Dex.Query(ctx, req.Method, req.Params)
 	case "goplus":
 		out, err = h.GoPlus.Query(ctx, req.Method, req.Params)
+	case "polymarket":
+		out, err = h.Polymarket.Query(ctx, req.Method, req.Params)
 	default:
 		httpx.WriteError(w, http.StatusNotFound, "unknown provider")
 		return

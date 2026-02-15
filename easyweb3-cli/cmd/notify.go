@@ -36,7 +36,11 @@ func notifyCmd(ctx Context, args []string) error {
 			return errors.New("--message required")
 		}
 
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("POST", "/api/v1/notify/send", map[string]any{
 			"channel": strings.TrimSpace(*channel),
 			"to":      strings.TrimSpace(*to),
@@ -63,7 +67,11 @@ func notifyCmd(ctx Context, args []string) error {
 			return errors.New("--message required")
 		}
 
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("POST", "/api/v1/notify/broadcast", map[string]any{
 			"message": strings.TrimSpace(*message),
 			"event":   strings.TrimSpace(*event),
@@ -83,7 +91,11 @@ func notifyCmd(ctx Context, args []string) error {
 		}
 		switch args[1] {
 		case "get":
-			c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+			tok, err := ensureBearerToken(ctx)
+			if err != nil {
+				return err
+			}
+			c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 			req, err := c.NewRequest("GET", "/api/v1/notify/config", nil)
 			if err != nil {
 				return err
@@ -108,7 +120,11 @@ func notifyCmd(ctx Context, args []string) error {
 			if err := json.Unmarshal([]byte(*body), &v); err != nil {
 				return err
 			}
-			c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+			tok, err := ensureBearerToken(ctx)
+			if err != nil {
+				return err
+			}
+			c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 			req, err := c.NewRequest("PUT", "/api/v1/notify/config", v)
 			if err != nil {
 				return err

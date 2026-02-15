@@ -25,7 +25,11 @@ func cacheCmd(ctx Context, args []string) error {
 		if key == "" {
 			return errors.New("key required")
 		}
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("GET", "/api/v1/cache/"+key, nil)
 		if err != nil {
 			return err
@@ -55,7 +59,11 @@ func cacheCmd(ctx Context, args []string) error {
 			payload["value_base64"] = base64.StdEncoding.EncodeToString([]byte(*value))
 		}
 
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("PUT", "/api/v1/cache/"+strings.TrimSpace(*key), payload)
 		if err != nil {
 			return err
@@ -74,7 +82,11 @@ func cacheCmd(ctx Context, args []string) error {
 		if key == "" {
 			return errors.New("key required")
 		}
-		c := &client.Client{BaseURL: ctx.APIBase, Token: ctx.Token}
+		tok, err := ensureBearerToken(ctx)
+		if err != nil {
+			return err
+		}
+		c := &client.Client{BaseURL: ctx.APIBase, Token: tok}
 		req, err := c.NewRequest("DELETE", "/api/v1/cache/"+key, nil)
 		if err != nil {
 			return err
