@@ -34,6 +34,14 @@ easyweb3-cli 是 PicoClaw 的主要“手”和“工具箱”：
 - 处理登录、token 持久化、基础错误提示
 - 把常用流程封装为稳定命令（降低模型自由发挥导致的协议漂移）
 
+运行时约定（避免常见踩坑）：
+- `easyweb3` 必须在 `PATH` 中
+  - 容器镜像推荐安装到：`/usr/local/bin/easyweb3`
+  - 或者在启动时显式注入：`PATH=/usr/local/bin:$PATH`
+- easyweb3 的状态目录（config/credentials）默认是 `~/.easyweb3/`
+  - 某些 PicoClaw sandbox 会限制访问 `~` 或 `/root` 下的路径
+  - 建议把状态目录固定到 workspace 内：设置 `EASYWEB3_DIR=/root/.picoclaw/workspace/.easyweb3`
+
 PicoClaw 应优先使用：
 - `easyweb3 auth login --api-key ...`
 - `easyweb3 api polymarket ...`（高层命令，推荐）
@@ -103,4 +111,3 @@ PicoClaw 需要保证：
 - 不要在不确定真实状态时强行“标记已执行/已取消”，必须先读回确认。
 - 不要把凭据（API Key/JWT）写入日志或回显给用户。
 - 不要在没有审计记录的情况下执行不可逆写操作。
-

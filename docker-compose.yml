@@ -113,10 +113,12 @@ services:
       EASYWEB3_API_BASE: "http://easyweb3-platform:8080"
       EASYWEB3_PROJECT: "polymarket"
       EASYWEB3_BOOTSTRAP_API_KEY: "ew3_admin_dev"
+      # Keep easyweb3 state under workspace to satisfy stricter sandboxes.
+      EASYWEB3_DIR: "/root/.picoclaw/workspace/.easyweb3"
     volumes:
       - ./skills:/skills-src:ro
       - picoclaw_workspace:/root/.picoclaw/workspace
-      - easyweb3_cli_state:/root/.easyweb3
+      - easyweb3_cli_state:/root/.picoclaw/workspace/.easyweb3
       # Mount your PicoClaw config if you want gateway channels (Telegram/Discord/etc).
       # - ./picoclaw-config/config.json:/root/.picoclaw/config.json:ro
     depends_on:
