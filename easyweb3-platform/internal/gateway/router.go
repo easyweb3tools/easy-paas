@@ -39,11 +39,11 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.Docs.Index(w, r)
 		return
 	}
-	if r.URL.Path == "/docs/architecture" {
+	if r.URL.Path == "/docs/architecture" || r.URL.Path == "/docs/architecture/" {
 		rt.Docs.Architecture(w, r)
 		return
 	}
-	if r.URL.Path == "/docs/picoclaw" {
+	if r.URL.Path == "/docs/picoclaw" || r.URL.Path == "/docs/picoclaw/" {
 		rt.Docs.PicoClaw(w, r)
 		return
 	}
