@@ -4,7 +4,7 @@ easy-paas 的目标是建立一个 **AI Agent 友好的 PaaS 平台**：
 
 - **API 面向 AI**：以确定性、可脚本化、可审计为第一优先级（CLI 优先于 Web UI）。
 - **Web 面向人类**：主要用于查询与展示 AI 行为轨迹（Logs/只读数据），基本不需要注册/登录。
-- **写操作只能由 PicoClaw 发起**：增删改（POST/PUT/PATCH/DELETE）全部需要鉴权，确保可控与可审计。
+- **写操作只能由 OpenClaw 发起**：增删改（POST/PUT/PATCH/DELETE）全部需要鉴权，确保可控与可审计。
 
 本仓库当前落地的业务服务为：`polymarket`（见 `services/polymarket`）。
 
@@ -34,10 +34,10 @@ easy-paas 的目标是建立一个 **AI Agent 友好的 PaaS 平台**：
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
-│                     PicoClaw (The Brain)                          │
+│                     OpenClaw (The Brain)                          │
 │  - one skill per project/service (this repo: polymarket-trader)   │
 │  - executes: easyweb3-cli via exec                                 │
-│  - all write operations originate from PicoClaw                    │
+│  - all write operations originate from OpenClaw                    │
 └─────────────────────────────┬───────────────────────────────────┘
                               │ exec: easyweb3 ...
                               v
@@ -67,7 +67,7 @@ easy-paas 的目标是建立一个 **AI Agent 友好的 PaaS 平台**：
 
 ### 2.3 Token Flow (AI)
 
-1. PicoClaw（或服务端组件）使用 API Key 换取 JWT：
+1. OpenClaw（或服务端组件）使用 API Key 换取 JWT：
    - `POST /api/v1/auth/login` with `{"api_key":"..."}`
 2. easyweb3-cli 把 token 存到 `~/.easyweb3/credentials.json`，后续写操作自动携带。
 
@@ -118,7 +118,7 @@ easy-paas 的目标是建立一个 **AI Agent 友好的 PaaS 平台**：
 
 代码位置：`easyweb3-cli/`
 
-定位：让 PicoClaw 通过 `exec` 调用一个稳定、可复现的命令接口，避免 agent 直接拼 HTTP、直接操作内部网络。
+定位：让 OpenClaw 通过 `exec` 调用一个稳定、可复现的命令接口，避免 agent 直接拼 HTTP、直接操作内部网络。
 
 核心命令（当前实现）：
 - `easyweb3 auth ...`
@@ -130,7 +130,7 @@ easy-paas 的目标是建立一个 **AI Agent 友好的 PaaS 平台**：
 - `easyweb3 api polymarket ...`（面向 polymarket 的高层命令封装）
 
 目标（接下来要继续完善）：
-- easyweb3-cli 成为 PicoClaw 的主要工具：把常用读写流程封装成确定的子命令，减少“自由形 HTTP”的概率。
+- easyweb3-cli 成为 OpenClaw 的主要工具：把常用读写流程封装成确定的子命令，减少“自由形 HTTP”的概率。
 
 ### 3.3 Business Service: polymarket
 
@@ -176,7 +176,7 @@ CLI 侧推荐用更稳定的封装（避免手写 method/params）：
 - `easyweb3 integrations polymarket catalog-markets --limit 50`
 - `easyweb3 integrations polymarket catalog-sync --scope all`
 
-## 5. PicoClaw Skills
+## 5. OpenClaw Skills
 
 本仓库技能目录：`skills/`
 
@@ -194,7 +194,7 @@ CLI 侧推荐用更稳定的封装（避免手写 method/params）：
   - `easyweb3-platform`（PaaS）
   - `services/polymarket/backend` + Postgres
   - 可选：`nginx`（`--profile web`）统一入口
-  - 可选：`picoclaw-gateway`（`--profile picoclaw`）
+  - 可选：`openclaw-gateway`（`--profile openclaw`）
 
 Nginx 路由（本地）：
 - `/api/v1/*` -> easyweb3-platform

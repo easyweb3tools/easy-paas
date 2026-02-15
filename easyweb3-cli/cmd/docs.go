@@ -18,7 +18,7 @@ func docsCmd(ctx Context, args []string) error {
 	switch args[0] {
 	case "url":
 		if len(args) < 2 {
-			return errors.New("usage: easyweb3 docs url architecture|picoclaw")
+			return errors.New("usage: easyweb3 docs url architecture|openclaw")
 		}
 		u, err := docURL(ctx.APIBase, args[1])
 		if err != nil {
@@ -33,7 +33,7 @@ func docsCmd(ctx Context, args []string) error {
 		outPath := fs.String("out", "", "write to file (optional)")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() < 1 {
-			return errors.New("usage: easyweb3 docs get [--out file] architecture|picoclaw")
+			return errors.New("usage: easyweb3 docs get [--out file] architecture|openclaw")
 		}
 
 		u, err := docURL(ctx.APIBase, fs.Arg(0))
@@ -69,10 +69,10 @@ func docURL(apiBase, name string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "architecture", "arch":
 		return base + "/docs/architecture", nil
-	case "picoclaw":
-		return base + "/docs/picoclaw", nil
+	case "openclaw", "picoclaw":
+		return base + "/docs/openclaw", nil
 	default:
-		return "", errors.New("unknown doc: " + name + " (expected architecture|picoclaw)")
+		return "", errors.New("unknown doc: " + name + " (expected architecture|openclaw)")
 	}
 }
 

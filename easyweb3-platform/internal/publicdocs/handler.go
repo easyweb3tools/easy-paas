@@ -12,7 +12,7 @@ import (
 
 type Handler struct {
 	// Dir holds markdown files to be served publicly.
-	// Expected file names: ARCHITECTURE.md, PICOCLAW.md.
+	// Expected file names: ARCHITECTURE.md, OPENCLAW.md.
 	Dir string
 }
 
@@ -23,15 +23,20 @@ func (h Handler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("# Public Docs\n\n- /docs/architecture\n- /docs/picoclaw\n"))
+	_, _ = w.Write([]byte("# Public Docs\n\n- /docs/architecture\n- /docs/openclaw\n"))
 }
 
 func (h Handler) Architecture(w http.ResponseWriter, r *http.Request) {
 	h.serve(w, r, "ARCHITECTURE.md")
 }
 
+func (h Handler) OpenClaw(w http.ResponseWriter, r *http.Request) {
+	h.serve(w, r, "OPENCLAW.md")
+}
+
+// PicoClaw is kept as a backward-compatible alias for older clients/links.
 func (h Handler) PicoClaw(w http.ResponseWriter, r *http.Request) {
-	h.serve(w, r, "PICOCLAW.md")
+	h.OpenClaw(w, r)
 }
 
 func (h Handler) serve(w http.ResponseWriter, r *http.Request, filename string) {

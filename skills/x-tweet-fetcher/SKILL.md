@@ -7,11 +7,11 @@ description: Fetch X/Twitter tweet JSON (including long tweets, quote tweets, an
 
 你负责在不登录、不使用 X API key 的前提下，抓取单条推文的结构化内容（文本、作者、统计、引用推文、长文/Article）。
 
-本 skill 设计目标是让 PicoClaw 能稳定地“拉取事实”，再由你在对话中做摘要/引用/归档。
+本 skill 设计目标是让 OpenClaw 能稳定地“拉取事实”，再由你在对话中做摘要/引用/归档。
 
 ## 依赖
 
-- `python3`（PicoClaw 容器镜像应包含）
+- `python3`（OpenClaw 容器镜像应包含）
 
 ## 输入
 
@@ -23,22 +23,22 @@ description: Fetch X/Twitter tweet JSON (including long tweets, quote tweets, an
 
 使用 vendored 脚本（来自 `ythx-101/x-tweet-fetcher`，基于 FxTwitter 公共 API）：
 
-脚本路径（PicoClaw workspace 内）：
+脚本路径（OpenClaw workspace 内）：
 
-`/root/.picoclaw/workspace/skills/x-tweet-fetcher/scripts/fetch_tweet.py`
+`/root/.openclaw/workspace/skills/x-tweet-fetcher/scripts/fetch_tweet.py`
 
 ## 工具调用方式（exec）
 
 ### 1) 拉取推文 JSON（推荐）
 
 ```bash
-exec: python3 /root/.picoclaw/workspace/skills/x-tweet-fetcher/scripts/fetch_tweet.py --url "<tweet_url>" --pretty
+exec: python3 /root/.openclaw/workspace/skills/x-tweet-fetcher/scripts/fetch_tweet.py --url "<tweet_url>" --pretty
 ```
 
 ### 2) 只输出可读文本（可选）
 
 ```bash
-exec: python3 /root/.picoclaw/workspace/skills/x-tweet-fetcher/scripts/fetch_tweet.py --url "<tweet_url>" --text-only
+exec: python3 /root/.openclaw/workspace/skills/x-tweet-fetcher/scripts/fetch_tweet.py --url "<tweet_url>" --text-only
 ```
 
 ### 2) 常见错误处理

@@ -35,7 +35,7 @@ Implemented:
   - Writes best-effort audit logs to PaaS for write-ish calls
 - Local deployment (`docker-compose.yml`)
   - `web` profile adds nginx as a single entrypoint
-  - `picoclaw` profile runs `picoclaw-gateway` (skills + exec easyweb3)
+  - `openclaw` profile runs `openclaw-gateway` (skills + exec easyweb3)
 - Production deployment (`deploy/paas`)
   - nginx on `:80` and pinned GHCR images
 
@@ -63,13 +63,13 @@ Exit criteria:
 - Fresh install + existing DB both work.
 - `/api/v2/analytics/*` stable (no schema-related 502).
 
-### 2) PicoClaw Ops + Skills
+### 2) OpenClaw Ops + Skills
 
 Tasks:
 1. Add a “bootstrap skill” for ops (done in deploy repo)
    - `deploy/paas/skills/paas-bootstrap/SKILL.md`
 2. Provider configuration templates (done in deploy repo)
-   - `deploy/paas/picoclaw-config/config.example.json`
+   - `deploy/paas/openclaw-config/openclaw.example.json` (in deploy repo)
 3. Add a health/reporting skill
    - Pull `easyweb3 service health/list`
    - Pull “cron last run” style data (needs new endpoint or parse logs)

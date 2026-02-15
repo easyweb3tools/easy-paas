@@ -43,8 +43,13 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.Docs.Architecture(w, r)
 		return
 	}
+	if r.URL.Path == "/docs/openclaw" || r.URL.Path == "/docs/openclaw/" {
+		rt.Docs.OpenClaw(w, r)
+		return
+	}
 	if r.URL.Path == "/docs/picoclaw" || r.URL.Path == "/docs/picoclaw/" {
-		rt.Docs.PicoClaw(w, r)
+		// Backward-compatible redirect (old name -> new name).
+		http.Redirect(w, r, "/docs/openclaw", http.StatusMovedPermanently)
 		return
 	}
 

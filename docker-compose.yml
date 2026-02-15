@@ -101,33 +101,34 @@ services:
       - easyweb3-platform
       - polymarket-backend
 
-  # Optional (profile): PicoClaw is "the brain" that calls easyweb3 via exec and runs skills.
-  # Enable with: docker compose --profile picoclaw up -d
-  picoclaw-gateway:
-    profiles: ["picoclaw"]
-    image: ${EASYWEB3_PICOCLAW_IMAGE:-easyweb3-picoclaw:local}
+  # Optional (profile): OpenClaw is "the brain" that calls easyweb3 via exec and runs skills.
+  # Enable with: docker compose --profile openclaw up -d
+  openclaw-gateway:
+    profiles: ["openclaw"]
+    image: ${EASYWEB3_OPENCLAW_IMAGE:-easyweb3-openclaw:local}
     build:
       context: .
-      dockerfile: ./picoclaw.Dockerfile
+      dockerfile: ./openclaw.Dockerfile
     environment:
       EASYWEB3_API_BASE: "http://easyweb3-platform:8080"
       EASYWEB3_PROJECT: "polymarket"
       EASYWEB3_BOOTSTRAP_API_KEY: "ew3_admin_dev"
-      # Keep easyweb3 state under workspace to satisfy stricter sandboxes.
-      EASYWEB3_DIR: "/root/.picoclaw/workspace/.easyweb3"
+      # Keep OpenClaw state + workspace in a mounted dir.
+      OPENCLAW_STATE_DIR: "/root/.openclaw"
+      OPENCLAW_SKILLS_SRC: "/skills-src"
+      # Keep easyweb3 state under workspace to satisfy stricter exec sandboxes.
+      EASYWEB3_DIR: "/root/.openclaw/workspace/.easyweb3"
     volumes:
       - ./skills:/skills-src:ro
-      - picoclaw_workspace:/root/.picoclaw/workspace
-      - easyweb3_cli_state:/root/.picoclaw/workspace/.easyweb3
-      # Mount your PicoClaw config if you want gateway channels (Telegram/Discord/etc).
-      # - ./picoclaw-config/config.json:/root/.picoclaw/config.json:ro
+      - openclaw_state:/root/.openclaw
+      # Mount your OpenClaw config if you want gateway channels (Telegram/Discord/etc).
+      # - ./openclaw-config/openclaw.json:/root/.openclaw/openclaw.json:ro
     depends_on:
       - easyweb3-platform
       - polymarket-backend
-    command: ["gateway"]
+    command: ["gateway", "--dev", "--allow-unconfigured", "--bind", "loopback", "--port", "18789"]
 
 volumes:
   polymarket_pgdata:
   easyweb3_platform_data:
-  picoclaw_workspace:
-  easyweb3_cli_state:
+  openclaw_state:

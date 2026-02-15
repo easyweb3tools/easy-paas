@@ -31,7 +31,7 @@ func DefaultConfig() Config {
 }
 
 func Dir() (string, error) {
-	// Allow sandboxes (e.g. PicoClaw workspace) to pin state to a writable/allowed directory.
+	// Allow sandboxes (e.g. OpenClaw workspace) to pin state to a writable/allowed directory.
 	// This directory holds config.json and credentials.json.
 	if v := strings.TrimSpace(os.Getenv("EASYWEB3_DIR")); v != "" {
 		return v, nil

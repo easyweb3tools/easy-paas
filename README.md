@@ -1,6 +1,6 @@
 # easy-paas
 
-This repo contains the easyweb3 PaaS platform, CLI, onboarded business services, and PicoClaw (agent runtime).
+This repo contains the easyweb3 PaaS platform, CLI, onboarded business services, and OpenClaw (agent runtime).
 
 ## Components
 
@@ -8,14 +8,13 @@ This repo contains the easyweb3 PaaS platform, CLI, onboarded business services,
 - `easyweb3-cli`: CLI client for agents (exec)
 - `services`: business services proxied behind PaaS
   - `services/polymarket`: Polymarket service migrated and adapted for PaaS
-- `picoclaw`: PicoClaw upstream (git submodule, built into image at build time)
-- `skills`: PicoClaw skills (one project/service one skill)
+- `skills`: OpenClaw skills (one project/service one skill)
 
 ## Docs
 
 - Setup / operations: `docs/setup.md`
 - Architecture: `docs/ARCHITECTURE.md`
-- PicoClaw role: `docs/PICOCLAW.md`
+- OpenClaw role: `docs/OPENCLAW.md`
 - Development plan: `docs/DEVELOPMENT_PLAN.md`
 
 ## Local Compose
@@ -24,9 +23,9 @@ A minimal local stack (PaaS + polymarket backend + postgres):
 
 - `docker-compose.yml`
 
-PicoClaw (the "brain") is included in compose as an optional profile:
+OpenClaw (the "brain") is included in compose as an optional profile:
 
-- `docker compose --profile picoclaw up -d`
+- `docker compose --profile openclaw up -d`
 
 Polymarket web UI (optional) can be enabled with:
 
@@ -41,20 +40,20 @@ Ports:
 The PaaS service registry is loaded from:
 - `services/services.local.json`
 
-## PicoClaw Skills
+## OpenClaw Skills
 
-In this repo, PicoClaw skills live under:
+In this repo, OpenClaw skills live under:
 
 - `skills/<skill-name>/SKILL.md`
 
 The runtime convention described in `docs/ARCHITECTURE.md` is:
 
-- `<picoclaw-workspace>/skills/<skill-name>/SKILL.md`
+- `~/.openclaw/workspace/skills/<skill-name>/SKILL.md`
 
 So in deployment (including docker compose), you typically:
 
-1. Mount `skills` into PicoClaw workspace `skills/`
-2. Ensure `easyweb3` CLI is on `PATH` inside the PicoClaw container/VM (recommended install path: `~/.local/bin/easyweb3`)
+1. Mount `skills` into OpenClaw workspace `workspace/skills/`
+2. Ensure `easyweb3` CLI is on `PATH` inside the OpenClaw container/VM (recommended install path: `/usr/local/bin/easyweb3`)
 3. Provide `EASYWEB3_API_BASE` and a way to authenticate (usually `easyweb3 auth login --api-key ...` at startup)
 
 Skill authoring guidelines (kept intentionally simple, SKILL = Markdown):
@@ -66,58 +65,60 @@ Skill authoring guidelines (kept intentionally simple, SKILL = Markdown):
 
 See: `skills/README.md`.
 
-### PicoClaw Image Build (GitHub Actions)
+### OpenClaw Image Build (GitHub Actions)
 
-This repo builds all v2 images (PaaS + services + PicoClaw) via GitHub Actions:
+This repo builds all v2 images (PaaS + services + OpenClaw) via GitHub Actions:
 
 - `.github/workflows/easy-paas-build-images.yml`
 
-PicoClaw is included as a git submodule, so the build can pull latest upstream at build time.
+OpenClaw is installed from npm in the `easyweb3-openclaw` image.
 
 On `release/v*` branch updates (e.g. `release/v1.0.0`), it builds and pushes:
 
 - `ghcr.io/<owner>/easyweb3-platform:<version>`
 - `ghcr.io/<owner>/easyweb3-polymarket-backend:<version>`
 - `ghcr.io/<owner>/easyweb3-polymarket-frontend:<version>`
-- `ghcr.io/<owner>/easyweb3-picoclaw:<version>` (e.g. `v1.0.0`)
+- `ghcr.io/<owner>/easyweb3-openclaw:<version>` (e.g. `v1.0.0`)
 - Each image also pushes `:sha-<shortsha>`
 
 ### Compose Deployment Pattern (Skill Mount + Startup Login)
 
-There is no hard dependency that PicoClaw must be deployed via compose, but if you do, the pattern is:
+There is no hard dependency that OpenClaw must be deployed via compose, but if you do, the pattern is:
 
 1. Start the PaaS + services (e.g. `docker-compose.yml`)
-2. Start a PicoClaw container with:
+2. Start an OpenClaw container with:
    - `skills` mounted into the container workspace skills directory
    - `easyweb3` available on `PATH`
-   - startup command that logs in once (API key) then runs PicoClaw
+   - startup command that logs in once (API key) then runs OpenClaw
 
-Example snippet (you need to adjust `image`, `command`, and the exact workspace path to match your PicoClaw image):
+Example snippet (you need to adjust `image`, `command`, and the exact workspace path to match your OpenClaw image):
 
 ```yaml
 services:
-  picoclaw-polymarket:
-    image: <your-picoclaw-image>
+  openclaw-polymarket:
+    image: <your-openclaw-image>
     restart: unless-stopped
     environment:
       EASYWEB3_API_BASE: http://easyweb3-platform:8080
       EASYWEB3_PROJECT: polymarket
       EASYWEB3_BOOTSTRAP_API_KEY: ew3_admin_dev
+      OPENCLAW_STATE_DIR: /state
+      EASYWEB3_DIR: /state/workspace/.easyweb3
     volumes:
       # Mount skill sources read-only, then copy into the actual workspace at container start.
       - ./skills:/skills-src:ro
-      - picoclaw_workspace:/workspace
+      - openclaw_state:/state
     command:
       - sh
       - -lc
       - |
-        mkdir -p /workspace/skills
-        cp -R /skills-src/* /workspace/skills/
+        mkdir -p /state/workspace/skills
+        cp -R /skills-src/* /state/workspace/skills/
         easyweb3 auth login --api-key "${EASYWEB3_BOOTSTRAP_API_KEY}"
-        exec picoclaw --workspace /workspace
+        exec openclaw gateway --dev --allow-unconfigured --bind loopback --port 18789
 
 volumes:
-  picoclaw_workspace:
+  openclaw_state:
 ```
 
 ## Quick Manual Test
