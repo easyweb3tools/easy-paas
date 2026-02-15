@@ -69,7 +69,7 @@ func docURL(apiBase, name string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "architecture", "arch":
 		return base + "/docs/architecture", nil
-	case "openclaw", "picoclaw":
+	case "openclaw":
 		return base + "/docs/openclaw", nil
 	default:
 		return "", errors.New("unknown doc: " + name + " (expected architecture|openclaw)")

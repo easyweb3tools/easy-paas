@@ -34,11 +34,6 @@ func (h Handler) OpenClaw(w http.ResponseWriter, r *http.Request) {
 	h.serve(w, r, "OPENCLAW.md")
 }
 
-// PicoClaw is kept as a backward-compatible alias for older clients/links.
-func (h Handler) PicoClaw(w http.ResponseWriter, r *http.Request) {
-	h.OpenClaw(w, r)
-}
-
 func (h Handler) serve(w http.ResponseWriter, r *http.Request, filename string) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		httpx.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")

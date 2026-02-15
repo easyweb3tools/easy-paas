@@ -47,11 +47,6 @@ func (rt Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.Docs.OpenClaw(w, r)
 		return
 	}
-	if r.URL.Path == "/docs/picoclaw" || r.URL.Path == "/docs/picoclaw/" {
-		// Backward-compatible redirect (old name -> new name).
-		http.Redirect(w, r, "/docs/openclaw", http.StatusMovedPermanently)
-		return
-	}
 
 	// Auth endpoints.
 	if r.URL.Path == "/api/v1/auth/login" {

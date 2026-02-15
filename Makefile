@@ -57,7 +57,7 @@ dev-stack:
 
 	test-docs:
 		@set -euo pipefail; \
-		for p in /docs /docs/architecture /docs/architecture/ /docs/openclaw /docs/openclaw/ /docs/picoclaw /docs/picoclaw/; do \
+		for p in /docs /docs/architecture /docs/architecture/ /docs/openclaw /docs/openclaw/; do \
 		  code=$$(curl -sS -o /tmp/ew3-doc-body.txt -w '%{http_code}' "http://127.0.0.1:18080$${p}"); \
 		  first=$$(head -n 1 /tmp/ew3-doc-body.txt | tr -d '\r'); \
 		  echo "$${p} -> $${code} :: $${first}"; \
