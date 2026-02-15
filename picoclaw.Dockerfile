@@ -47,7 +47,7 @@ RUN CGO_ENABLED=0 go build -o /out/easyweb3 .
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata curl python3
 
 COPY --from=picoclaw_build /src/picoclaw/build/picoclaw /usr/local/bin/picoclaw
 COPY --from=picoclaw_build /out/picoclaw_skills /opt/picoclaw/skills
