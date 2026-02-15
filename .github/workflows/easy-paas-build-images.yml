@@ -117,11 +117,8 @@ jobs:
             STATUS="FAILURE"
           fi
 
-          TEXT="[$STATUS] ${GITHUB_REPOSITORY} (${GITHUB_REF_NAME})
-- build: ${BUILD_RESULT}
-- images: easyweb3-platform, easyweb3-polymarket-backend, easyweb3-polymarket-frontend, easyweb3-picoclaw
-sha: ${GITHUB_SHA}
-run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          TEXT="$(printf '[%s] %s (%s)\n- build: %s\n- images: easyweb3-platform, easyweb3-polymarket-backend, easyweb3-polymarket-frontend, easyweb3-picoclaw\nsha: %s\nrun: https://github.com/%s/actions/runs/%s' \
+            "${STATUS}" "${GITHUB_REPOSITORY}" "${GITHUB_REF_NAME}" "${BUILD_RESULT}" "${GITHUB_SHA}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}")"
 
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
