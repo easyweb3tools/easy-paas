@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiDelete, apiGet, apiPut } from "@/lib/api";
+import { DEFAULTS } from "@/lib/constants";
 
 type ExecutionRule = {
   ID: number;
@@ -33,12 +34,12 @@ type Draft = {
 function toDraft(rule?: ExecutionRule): Draft {
   return {
     auto_execute: !!rule?.AutoExecute,
-    min_confidence: String(rule?.MinConfidence ?? 0.8),
-    min_edge_pct: String(rule?.MinEdgePct ?? "0.05"),
-    stop_loss_pct: String(rule?.StopLossPct ?? "0.10"),
-    take_profit_pct: String(rule?.TakeProfitPct ?? "0.20"),
-    max_hold_hours: String(rule?.MaxHoldHours ?? 72),
-    max_daily_trades: String(rule?.MaxDailyTrades ?? 10),
+    min_confidence: String(rule?.MinConfidence ?? DEFAULTS.MIN_CONFIDENCE),
+    min_edge_pct: String(rule?.MinEdgePct ?? DEFAULTS.MIN_EDGE),
+    stop_loss_pct: String(rule?.StopLossPct ?? DEFAULTS.STOP_LOSS_PCT),
+    take_profit_pct: String(rule?.TakeProfitPct ?? DEFAULTS.TAKE_PROFIT_PCT),
+    max_hold_hours: String(rule?.MaxHoldHours ?? DEFAULTS.MAX_HOLD_HOURS),
+    max_daily_trades: String(rule?.MaxDailyTrades ?? DEFAULTS.MAX_DAILY_TRADES),
   };
 }
 
@@ -48,14 +49,17 @@ export default function AutomationPage() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
       const [rulesBody, strategyBody] = await Promise.all([
-        apiGet<ExecutionRule[]>("/api/v2/execution-rules", { cache: "no-store" }),
-        apiGet<Strategy[]>("/api/v2/strategies", { cache: "no-store" }),
+        apiGet<ExecutionRule[]>("/api/v2/execution-rules", { cache: "no-store", signal }),
+        apiGet<Strategy[]>("/api/v2/strategies", { cache: "no-store", signal }),
       ]);
       const nextRules = rulesBody.data ?? [];
       const nextStrategies = strategyBody.data ?? [];
@@ -68,14 +72,18 @@ export default function AutomationPage() {
       }
       setDrafts(m);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   const names = useMemo(() => {
@@ -89,7 +97,8 @@ export default function AutomationPage() {
     const d = drafts[name];
     if (!d) return;
     try {
-      await apiPut(`/api/v2/execution-rules/${name}`, {
+      const safeName = encodeURIComponent(name);
+      await apiPut(`/api/v2/execution-rules/${safeName}`, {
         auto_execute: d.auto_execute,
         min_confidence: Number(d.min_confidence),
         min_edge_pct: d.min_edge_pct,
@@ -106,7 +115,8 @@ export default function AutomationPage() {
 
   async function remove(name: string) {
     try {
-      await apiDelete(`/api/v2/execution-rules/${name}`);
+      const safeName = encodeURIComponent(name);
+      await apiDelete(`/api/v2/execution-rules/${safeName}`);
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "unknown error");
@@ -115,7 +125,7 @@ export default function AutomationPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -134,8 +144,20 @@ export default function AutomationPage() {
         {error ? <div className="mt-3 text-sm text-red-500">{error}</div> : null}
       </section>
 
-      <section className="glass-panel overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <div className="overflow-x-auto">
+      <section className="glass-panel overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        {loading ? (
+          <div className="space-y-2 px-6 py-6">
+            <div className="skeleton h-6 w-1/2" />
+            <div className="skeleton h-16 w-full" />
+            <div className="skeleton h-16 w-full" />
+          </div>
+        ) : null}
+        {names.length === 0 && !loading ? (
+          <div className="px-6 py-8 text-sm text-[var(--muted)]">No strategy rules yet.</div>
+        ) : null}
+        {names.length > 0 && !loading ? (
+          <>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
@@ -231,6 +253,39 @@ export default function AutomationPage() {
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {names.map((name) => {
+            const d = drafts[name] ?? toDraft();
+            return (
+              <div key={`m-${name}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+                <div className="font-mono text-xs">{name}</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={d.auto_execute}
+                      onChange={(e) => setDrafts((prev) => ({ ...prev, [name]: { ...d, auto_execute: e.target.checked } }))}
+                    />
+                    auto
+                  </label>
+                  <span>conf {d.min_confidence}</span>
+                  <span>edge {d.min_edge_pct}</span>
+                  <span>hold {d.max_hold_hours}h</span>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button className="rounded-lg border border-[color:var(--border)] px-3 py-2 text-xs" onClick={() => void save(name)}>
+                    Save
+                  </button>
+                  <button className="rounded-lg border border-[color:var(--border)] px-3 py-2 text-xs" onClick={() => void remove(name)}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+          </>
+        ) : null}
       </section>
     </div>
   );

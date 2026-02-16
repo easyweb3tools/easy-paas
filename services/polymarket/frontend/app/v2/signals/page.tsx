@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, ApiResponse } from "@/lib/api";
+import { DEFAULTS } from "@/lib/constants";
 
 type Signal = {
   ID: number;
@@ -13,7 +14,7 @@ type Signal = {
   TokenID?: string | null;
   Strength: number;
   Direction: string;
-  Payload: unknown;
+  Payload: Record<string, unknown>;
   ExpiresAt?: string | null;
   CreatedAt?: string;
 };
@@ -46,41 +47,48 @@ export default function SignalsPage() {
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState("");
   const [source, setSource] = useState("");
+  const loadingRef = useRef(false);
 
   const query = useMemo(() => {
     const sp = new URLSearchParams();
     if (type) sp.set("type", type);
     if (source) sp.set("source", source);
-    sp.set("limit", "100");
+    sp.set("limit", String(DEFAULTS.PAGE_LIMIT));
     sp.set("offset", "0");
     return sp.toString();
   }, [type, source]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
       const [sigBody, srcBody] = await Promise.all([
-        apiGet<Signal[]>(`/api/v2/signals?${query}`, { cache: "no-store" }),
-        apiGet<SignalSource[]>(`/api/v2/signals/sources`, { cache: "no-store" }),
+        apiGet<Signal[]>(`/api/v2/signals?${query}`, { cache: "no-store", signal }),
+        apiGet<SignalSource[]>(`/api/v2/signals/sources`, { cache: "no-store", signal }),
       ]);
       setSignals(sigBody.data ?? []);
       setMeta(sigBody.meta);
       setSources(srcBody.data ?? []);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [query]);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -122,11 +130,11 @@ export default function SignalsPage() {
         </div>
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">Signal Sources</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
@@ -152,13 +160,25 @@ export default function SignalsPage() {
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {sources.map((s) => (
+            <div key={`m-${s.Name}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs">{s.Name}</span>
+                <span className="text-xs">{s.HealthStatus}</span>
+              </div>
+              <div className="mt-1 text-xs text-[var(--muted)]">{s.SourceType}</div>
+              <div className="mt-1 truncate text-xs">{s.Endpoint}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">Signals</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
@@ -185,7 +205,7 @@ export default function SignalsPage() {
                   <td className="px-4 py-4">
                     <details>
                       <summary className="cursor-pointer text-xs text-[var(--text)]">view</summary>
-                      <pre className="mt-2 max-h-[220px] overflow-auto rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
+                      <pre className="mt-2 max-h-[220px] overflow-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
                         {pretty(it.Payload)}
                       </pre>
                     </details>
@@ -195,8 +215,24 @@ export default function SignalsPage() {
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {signals.map((it) => (
+            <div key={`ms-${it.ID}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs">#{it.ID}</span>
+                <span className="text-xs">{it.SignalType}</span>
+              </div>
+              <div className="mt-1 text-xs text-[var(--muted)]">{it.Source} · {it.Direction} · {it.Strength.toFixed(2)}</div>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs">payload</summary>
+                <pre className="mt-1 max-h-[180px] overflow-auto rounded-lg border border-[color:var(--border)] p-2 text-[10px]">
+                  {pretty(it.Payload)}
+                </pre>
+              </details>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );
 }
-

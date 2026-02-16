@@ -11,6 +11,10 @@
   --muted: rgba(15, 23, 42, 0.55);
   --shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
   --glow: 0 0 0 rgba(0, 0, 0, 0);
+  --color-profit: #34c759;
+  --color-loss: #ff3b30;
+  --color-warn: #ff9500;
+  --color-info: #007aff;
 }
 
 .dark {
@@ -38,7 +42,7 @@ html {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 24px;
+  border-radius: 12px;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
   opacity: 0.35;
   pointer-events: none;
@@ -48,7 +52,7 @@ html {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 24px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   opacity: 0;
   pointer-events: none;
@@ -62,4 +66,46 @@ html {
 .dark .glass-panel::after {
   opacity: 1;
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+button,
+input,
+select,
+textarea,
+a {
+  min-height: 44px;
+}
+
+table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+table tbody tr:hover {
+  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
+}
+
+.skeleton {
+  background: var(--border);
+  border-radius: 8px;
+  animation: pulse 1.5s infinite;
+}
+
+.text-profit {
+  color: var(--color-profit);
+}
+
+.text-loss {
+  color: var(--color-loss);
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0.7;
+  }
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import { apiGet, apiPost } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 
 type Order = {
   ID: number;
@@ -23,26 +24,20 @@ function fmt(v: string | number, digits = 2) {
 }
 
 export default function OrdersPage() {
-  const [items, setItems] = useState<Order[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const body = await apiGet<Order[]>("/api/v2/orders?limit=100", { cache: "no-store" });
-      setItems(body.data ?? []);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "unknown error");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const {
+    data: itemsData,
+    error,
+    loading,
+    refresh,
+    setError,
+  } = useApi<Order[]>(
+    useCallback(async (signal?: AbortSignal) => {
+      const body = await apiGet<Order[]>("/api/v2/orders?limit=100", { cache: "no-store", signal });
+      return body.data ?? [];
+    }, []),
+    []
+  );
+  const items = itemsData ?? [];
 
   async function cancel(id: number) {
     try {
@@ -55,7 +50,7 @@ export default function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -72,12 +67,24 @@ export default function OrdersPage() {
         {error ? <div className="mt-3 text-sm text-red-500">{error}</div> : null}
       </section>
 
-      <section className="glass-panel overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <div className="overflow-x-auto">
+      <section className="glass-panel overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        {loading ? (
+          <div className="space-y-2 px-6 py-6">
+            <div className="skeleton h-6 w-1/2" />
+            <div className="skeleton h-16 w-full" />
+            <div className="skeleton h-16 w-full" />
+          </div>
+        ) : null}
+        {items.length === 0 && !loading ? (
+          <div className="px-6 py-8 text-sm text-[var(--muted)]">No active orders. Submit an execution plan to place orders.</div>
+        ) : null}
+        {!loading && items.length > 0 ? (
+          <>
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
-                <th className="px-4 py-3">id</th>
+                <th className="px-4 py-3">id ↑↓</th>
                 <th className="px-4 py-3">plan</th>
                 <th className="px-4 py-3">token</th>
                 <th className="px-4 py-3">side</th>
@@ -113,6 +120,29 @@ export default function OrdersPage() {
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {items.map((it) => (
+            <div key={`m-${it.ID}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs">#{it.ID}</span>
+                <span className="text-xs">{it.Status}</span>
+              </div>
+              <div className="mt-2 text-xs text-[var(--muted)]">{it.TokenID}</div>
+              <div className="mt-1 text-xs">{it.Side} · ${fmt(it.Price, 4)} · ${fmt(it.SizeUSD)}</div>
+              <div className="mt-2">
+                <button
+                  className="rounded-lg border border-[color:var(--border)] px-3 py-2 text-xs"
+                  onClick={() => void cancel(it.ID)}
+                  disabled={it.Status !== "submitted" && it.Status !== "partial" && it.Status !== "pending"}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        </>
+        ) : null}
       </section>
     </div>
   );

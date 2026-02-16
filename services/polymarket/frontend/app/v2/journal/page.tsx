@@ -1,8 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, apiPut, ApiMeta } from "@/lib/api";
+import { DEFAULTS } from "@/lib/constants";
+
+type JournalSignalSnapshot = {
+  signal_ids?: number[];
+  signals?: Array<Record<string, unknown>>;
+};
+
+type JournalMarketSnapshot = {
+  orderbooks?: Array<Record<string, unknown>>;
+  last_trade_prices?: Array<Record<string, unknown>>;
+  execution?: Record<string, unknown>;
+};
 
 type JournalItem = {
   ExecutionPlanID: number;
@@ -15,10 +27,10 @@ type JournalItem = {
   ROI?: string | null;
   Notes: string;
   Tags?: string[] | null;
-  SignalSnapshot?: unknown;
-  MarketSnapshot?: unknown;
-  EntryParams?: unknown;
-  OutcomeSnapshot?: unknown;
+  SignalSnapshot?: JournalSignalSnapshot;
+  MarketSnapshot?: JournalMarketSnapshot;
+  EntryParams?: Record<string, unknown>;
+  OutcomeSnapshot?: Record<string, unknown>;
   CreatedAt: string;
   UpdatedAt: string;
 };
@@ -32,20 +44,23 @@ export default function JournalPage() {
   const [outcome, setOutcome] = useState("");
   const [editing, setEditing] = useState<Record<number, { notes: string; tags: string }>>({});
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const loadingRef = useRef(false);
 
   const query = useMemo(() => {
     const q = new URLSearchParams();
-    q.set("limit", "100");
+    q.set("limit", String(DEFAULTS.PAGE_LIMIT));
     if (strategy.trim()) q.set("strategy_name", strategy.trim());
     if (outcome.trim()) q.set("outcome", outcome.trim());
     return q.toString();
   }, [strategy, outcome]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const body = await apiGet<JournalItem[]>(`/api/v2/journal?${query}`, { cache: "no-store" });
+      const body = await apiGet<JournalItem[]>(`/api/v2/journal?${query}`, { cache: "no-store", signal });
       setItems(body.data ?? []);
       setMeta(body.meta);
       const next: Record<number, { notes: string; tags: string }> = {};
@@ -54,14 +69,18 @@ export default function JournalPage() {
       }
       setEditing(next);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [query]);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   async function save(planID: number) {
@@ -81,7 +100,7 @@ export default function JournalPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -112,7 +131,7 @@ export default function JournalPage() {
         {error ? <div className="mt-3 text-sm text-red-500">{error}</div> : null}
       </section>
 
-      <section className="glass-panel overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         {loading ? (
           <div className="px-6 py-8 text-sm text-[var(--muted)]">加载中...</div>
         ) : items.length === 0 ? (
@@ -128,7 +147,7 @@ export default function JournalPage() {
                       <span className="font-mono">plan#{it.ExecutionPlanID}</span>
                       <span>{it.StrategyName}</span>
                       <span>outcome={it.Outcome || "pending"}</span>
-                      <span>pnl={it.PnLUSD ?? "--"}</span>
+                      <span className={Number(it.PnLUSD ?? "0") >= 0 ? "text-profit" : "text-loss"}>pnl={it.PnLUSD ?? "--"}</span>
                       <span>roi={it.ROI ?? "--"}</span>
                     </div>
                     <span className="text-xs text-[var(--muted)]">{new Date(it.CreatedAt).toLocaleString()}</span>
