@@ -74,6 +74,10 @@ func main() {
 	clobHTTP := &http.Client{Timeout: cfg.ClobREST.Timeout}
 	clobClient := clob.NewClient(clobHTTP, cfg.ClobREST.BaseURL)
 	store := gormrepository.New(dbConn.Gorm)
+	settingsSvc := &service.SystemSettingsService{Repo: store}
+	if err := settingsSvc.EnsureDefaultSwitches(context.Background()); err != nil {
+		logger.Warn("init default system switches failed", zap.Error(err))
+	}
 	catalogService := &service.CatalogSyncService{
 		Store:  store,
 		Gamma:  gammaClient,
@@ -84,11 +88,9 @@ func main() {
 	streamService := &service.CLOBStreamService{Repo: store, Logger: logger}
 
 	var marketLabeler *labeler.MarketLabeler
-	if cfg.Labeler.Enabled {
-		marketLabeler = &labeler.MarketLabeler{
-			Repo:   store,
-			Logger: logger,
-		}
+	marketLabeler = &labeler.MarketLabeler{
+		Repo:   store,
+		Logger: logger,
 	}
 
 	if strings.EqualFold(cfg.App.Env, "dev") {
@@ -125,12 +127,20 @@ func main() {
 	v2Opps.Register(engine)
 	v2Labels := &handler.V2LabelHandler{Repo: store, Labeler: marketLabeler}
 	v2Labels.Register(engine)
+	journalSvc := &service.JournalService{Repo: store}
 	v2Exec := &handler.V2ExecutionHandler{Repo: store, Risk: riskMgr}
+	v2Exec.Journal = journalSvc
 	v2Exec.Register(engine)
 	v2Analytics := &handler.V2AnalyticsHandler{Repo: store}
 	v2Analytics.Register(engine)
 	v2Settlements := &handler.V2SettlementHandler{Repo: store}
 	v2Settlements.Register(engine)
+	v2Rules := &handler.V2ExecutionRuleHandler{Repo: store}
+	v2Rules.Register(engine)
+	v2Journal := &handler.V2JournalHandler{Repo: store}
+	v2Journal.Register(engine)
+	v2Settings := &handler.V2SystemSettingsHandler{Repo: store, Settings: settingsSvc}
+	v2Settings.Register(engine)
 
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -148,89 +158,92 @@ func main() {
 	}
 
 	cronRunner := cronrunner.New(logger, baseCtx)
-	if cfg.Cron.Enabled {
-		scope := cfg.CatalogSync.Scope
-		limit := cfg.CatalogSync.PageLimit
-		maxPages := cfg.CatalogSync.MaxPages
-		resume := cfg.CatalogSync.Resume
-		var tagID *int
-		if cfg.CatalogSync.TagID > 0 {
-			tagID = &cfg.CatalogSync.TagID
-		}
-		closed := parseClosedFilter(cfg.CatalogSync.Closed)
+	scope := cfg.CatalogSync.Scope
+	limit := cfg.CatalogSync.PageLimit
+	maxPages := cfg.CatalogSync.MaxPages
+	resume := cfg.CatalogSync.Resume
+	var tagID *int
+	if cfg.CatalogSync.TagID > 0 {
+		tagID = &cfg.CatalogSync.TagID
+	}
+	closed := parseClosedFilter(cfg.CatalogSync.Closed)
 
-		_, err := cronRunner.Add(cfg.Cron.CatalogSync, func(ctx context.Context) {
-			result, err := catalogService.Sync(ctx, service.SyncOptions{
-				Scope:             scope,
-				Limit:             limit,
-				MaxPages:          maxPages,
-				Resume:            resume,
-				TagID:             tagID,
-				Closed:            closed,
-				BookMaxAssets:     cfg.CatalogSync.BookMaxAssets,
-				BookBatchSize:     cfg.CatalogSync.BookBatchSize,
-				BookSleepPerBatch: cfg.CatalogSync.BookSleepPerBatch,
-			})
-			if err != nil {
-				logger.Warn("cron catalog sync failed", zap.Error(err))
-				if paasClient != nil {
-					ctx2, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-					_ = paasClient.CreateLog(ctx2, paas.CreateLogRequest{
-						Agent:  "polymarket-service",
-						Action: "polymarket_cron_catalog_sync_failed",
-						Level:  "warn",
-						Details: map[string]any{
-							"error": err.Error(),
-						},
-						SessionKey: "",
-						Metadata:   map[string]any{},
-					})
-					cancel()
-				}
-				return
-			}
-			logger.Info("cron catalog sync ok",
-				zap.String("scope", result.Scope),
-				zap.Int("pages", result.Pages),
-				zap.Int("events", result.Events),
-				zap.Int("markets", result.Markets),
-				zap.Int("tokens", result.Tokens),
-				zap.Int("series", result.Series),
-				zap.Int("tags", result.Tags),
-			)
+	_, err = cronRunner.Add(cfg.Cron.CatalogSync, func(ctx context.Context) {
+		if !settingsSvc.IsEnabled(ctx, service.FeatureCatalogSync, true) {
+			return
+		}
+		result, err := catalogService.Sync(ctx, service.SyncOptions{
+			Scope:             scope,
+			Limit:             limit,
+			MaxPages:          maxPages,
+			Resume:            resume,
+			TagID:             tagID,
+			Closed:            closed,
+			BookMaxAssets:     cfg.CatalogSync.BookMaxAssets,
+			BookBatchSize:     cfg.CatalogSync.BookBatchSize,
+			BookSleepPerBatch: cfg.CatalogSync.BookSleepPerBatch,
+		})
+		if err != nil {
+			logger.Warn("cron catalog sync failed", zap.Error(err))
 			if paasClient != nil {
 				ctx2, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				_ = paasClient.CreateLog(ctx2, paas.CreateLogRequest{
 					Agent:  "polymarket-service",
-					Action: "polymarket_cron_catalog_sync_ok",
-					Level:  "info",
+					Action: "polymarket_cron_catalog_sync_failed",
+					Level:  "warn",
 					Details: map[string]any{
-						"scope":   result.Scope,
-						"pages":   result.Pages,
-						"events":  result.Events,
-						"markets": result.Markets,
-						"tokens":  result.Tokens,
-						"series":  result.Series,
-						"tags":    result.Tags,
+						"error": err.Error(),
 					},
 					SessionKey: "",
 					Metadata:   map[string]any{},
 				})
 				cancel()
 			}
-		})
-		if err != nil {
-			logger.Warn("cron register catalog sync failed", zap.Error(err))
+			return
 		}
-
-		cronRunner.Start()
-		defer cronRunner.Stop()
+		logger.Info("cron catalog sync ok",
+			zap.String("scope", result.Scope),
+			zap.Int("pages", result.Pages),
+			zap.Int("events", result.Events),
+			zap.Int("markets", result.Markets),
+			zap.Int("tokens", result.Tokens),
+			zap.Int("series", result.Series),
+			zap.Int("tags", result.Tags),
+		)
+		if paasClient != nil {
+			ctx2, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_ = paasClient.CreateLog(ctx2, paas.CreateLogRequest{
+				Agent:  "polymarket-service",
+				Action: "polymarket_cron_catalog_sync_ok",
+				Level:  "info",
+				Details: map[string]any{
+					"scope":   result.Scope,
+					"pages":   result.Pages,
+					"events":  result.Events,
+					"markets": result.Markets,
+					"tokens":  result.Tokens,
+					"series":  result.Series,
+					"tags":    result.Tags,
+				},
+				SessionKey: "",
+				Metadata:   map[string]any{},
+			})
+			cancel()
+		}
+	})
+	if err != nil {
+		logger.Warn("cron register catalog sync failed", zap.Error(err))
 	}
+	cronRunner.Start()
+	defer cronRunner.Stop()
 
-	// Prefer cron scheduling (same switch as catalog sync).
-	if cfg.Cron.Enabled && cfg.Labeler.Enabled && marketLabeler != nil {
+	// Prefer cron scheduling for labeler with DB switch.
+	if marketLabeler != nil {
 		spec := "@every " + cfg.Labeler.ScanInterval.String()
 		_, err := cronRunner.Add(spec, func(ctx context.Context) {
+			if !settingsSvc.IsEnabled(ctx, service.FeatureLabeler, false) {
+				return
+			}
 			if err := marketLabeler.LabelMarkets(ctx); err != nil {
 				logger.Warn("labeler run failed", zap.Error(err))
 			}
@@ -240,7 +253,7 @@ func main() {
 		}
 	}
 
-	if cfg.Cron.Enabled {
+	if settingsSvc.IsEnabled(baseCtx, service.FeatureCLOBStream, true) {
 		go func() {
 			err := streamService.RunMarketStream(baseCtx, service.CLOBStreamOptions{
 				URL:             cfg.ClobStream.URL,
@@ -253,7 +266,7 @@ func main() {
 		}()
 	}
 
-	if cfg.StrategyEngine.Enabled {
+	if settingsSvc.IsEnabled(baseCtx, service.FeatureStrategyEngine, false) {
 		hub := signalhub.NewHub(store, logger)
 		hub.Register(&signalhub.SettlementHistoryCollector{
 			Repo:       store,
@@ -266,21 +279,21 @@ func main() {
 			Logger:   logger,
 			Interval: cfg.StrategyEngine.ScanInterval,
 		})
-		if cfg.SignalSources.WeatherAPI.Enabled {
+		if settingsSvc.IsEnabled(baseCtx, service.FeatureSignalWeatherAPI, false) {
 			hub.Register(&signalhub.WeatherAPICollector{
 				Logger:  logger,
 				Cities:  cfg.SignalSources.WeatherAPI.Cities,
 				Sources: cfg.SignalSources.WeatherAPI.Sources,
 			})
 		}
-		if cfg.SignalSources.BinanceWS.Enabled {
+		if settingsSvc.IsEnabled(baseCtx, service.FeatureSignalBinanceWS, false) {
 			hub.Register(&signalhub.BinanceDepthCollector{
 				Logger: logger,
 				URL:    cfg.SignalSources.BinanceWS.URL,
 				Symbol: cfg.SignalSources.BinanceWS.Symbol,
 			})
 		}
-		if cfg.SignalSources.BinancePrice.Enabled {
+		if settingsSvc.IsEnabled(baseCtx, service.FeatureSignalBinancePrice, false) {
 			hub.Register(&signalhub.BinancePriceCollector{
 				Logger:        logger,
 				Endpoint:      cfg.SignalSources.BinancePrice.Endpoint,
@@ -289,21 +302,21 @@ func main() {
 				TriggerPct:    cfg.SignalSources.BinancePrice.TriggerPct,
 			})
 		}
-		if cfg.SignalSources.PriceChange.Enabled {
+		if settingsSvc.IsEnabled(baseCtx, service.FeatureSignalPriceChange, false) {
 			hub.Register(&signalhub.PriceChangeCollector{
 				Repo:   store,
 				Logger: logger,
 				Config: cfg.SignalSources.PriceChange,
 			})
 		}
-		if cfg.SignalSources.Orderbook.Enabled {
+		if settingsSvc.IsEnabled(baseCtx, service.FeatureSignalOrderbook, false) {
 			hub.Register(&signalhub.OrderbookPatternCollector{
 				Repo:   store,
 				Logger: logger,
 				Config: cfg.SignalSources.Orderbook,
 			})
 		}
-		if cfg.SignalSources.Certainty.Enabled {
+		if settingsSvc.IsEnabled(baseCtx, service.FeatureSignalCertainty, false) {
 			hub.Register(&signalhub.CertaintySweepCollector{
 				Repo:   store,
 				Logger: logger,
@@ -353,36 +366,46 @@ func main() {
 		}()
 
 		// Periodic cleanup: remove expired signals to prevent unbounded growth.
-		if cfg.Cron.Enabled {
-			_, err := cronRunner.Add("@every 10m", func(ctx context.Context) {
-				n, err := store.DeleteExpiredSignals(ctx, time.Now().UTC())
-				if err != nil {
-					logger.Warn("delete expired signals failed", zap.Error(err))
-					return
-				}
-				if n > 0 {
-					logger.Info("deleted expired signals", zap.Int64("count", n))
-				}
-			})
+		_, err := cronRunner.Add("@every 10m", func(ctx context.Context) {
+			n, err := store.DeleteExpiredSignals(ctx, time.Now().UTC())
 			if err != nil {
-				logger.Warn("cron register signal cleanup failed", zap.Error(err))
+				logger.Warn("delete expired signals failed", zap.Error(err))
+				return
 			}
+			if n > 0 {
+				logger.Info("deleted expired signals", zap.Int64("count", n))
+			}
+		})
+		if err != nil {
+			logger.Warn("cron register signal cleanup failed", zap.Error(err))
 		}
 	}
 
-	if cfg.SettlementIngest.Enabled {
-		ingestor := &service.SettlementIngestService{
-			Repo:   store,
-			Gamma:  gammaClient,
-			Config: cfg.SettlementIngest,
-			Logger: logger,
-		}
-		go func() {
-			if err := ingestor.Run(baseCtx); err != nil && !errors.Is(err, context.Canceled) {
-				logger.Warn("settlement ingestor stopped", zap.Error(err))
-			}
-		}()
+	ingestor := &service.SettlementIngestService{
+		Repo:   store,
+		Gamma:  gammaClient,
+		Config: cfg.SettlementIngest,
+		Logger: logger,
+		Flags:  settingsSvc,
 	}
+	go func() {
+		if err := ingestor.Run(baseCtx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Warn("settlement ingestor stopped", zap.Error(err))
+		}
+	}()
+
+	auto := &service.AutoExecutorService{
+		Repo:   store,
+		Risk:   riskMgr,
+		Logger: logger,
+		Config: cfg.AutoExecutor,
+		Flags:  settingsSvc,
+	}
+	go func() {
+		if err := auto.Run(baseCtx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Warn("auto executor stopped", zap.Error(err))
+		}
+	}()
 
 	errCh := make(chan error, 2)
 

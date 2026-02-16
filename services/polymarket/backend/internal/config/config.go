@@ -24,6 +24,7 @@ type Config struct {
 	Risk             RiskConfig             `mapstructure:"risk"`
 	Labeler          LabelerConfig          `mapstructure:"labeler"`
 	SettlementIngest SettlementIngestConfig `mapstructure:"settlement_ingest"`
+	AutoExecutor     AutoExecutorConfig     `mapstructure:"auto_executor"`
 	StrategyDefaults map[string]any         `mapstructure:"strategy_defaults"`
 }
 
@@ -185,6 +186,15 @@ type SettlementIngestConfig struct {
 	BatchSize    int           `mapstructure:"batch_size"`
 }
 
+type AutoExecutorConfig struct {
+	Enabled              bool          `mapstructure:"enabled"`
+	ScanInterval         time.Duration `mapstructure:"scan_interval"`
+	MaxOpportunities     int           `mapstructure:"max_opportunities"`
+	DefaultMinConfidence float64       `mapstructure:"default_min_confidence"`
+	DefaultMinEdgePct    float64       `mapstructure:"default_min_edge_pct"`
+	DryRun               bool          `mapstructure:"dry_run"`
+}
+
 func Load(path string, envOnly bool) (Config, error) {
 	v := viper.New()
 	v.SetEnvPrefix("PM")
@@ -247,6 +257,12 @@ func Load(path string, envOnly bool) (Config, error) {
 	v.SetDefault("settlement_ingest.scan_interval", "6h")
 	v.SetDefault("settlement_ingest.lookback_days", 14)
 	v.SetDefault("settlement_ingest.batch_size", 200)
+	v.SetDefault("auto_executor.enabled", false)
+	v.SetDefault("auto_executor.scan_interval", "10s")
+	v.SetDefault("auto_executor.max_opportunities", 100)
+	v.SetDefault("auto_executor.default_min_confidence", 0.8)
+	v.SetDefault("auto_executor.default_min_edge_pct", 0.05)
+	v.SetDefault("auto_executor.dry_run", true)
 
 	v.SetDefault("signal_sources.price_change.enabled", false)
 	v.SetDefault("signal_sources.price_change.interval", "5s")

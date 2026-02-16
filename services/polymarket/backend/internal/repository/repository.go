@@ -105,11 +105,32 @@ type Repository interface {
 	UpdateExecutionPlanStatus(ctx context.Context, id uint64, status string) error
 	UpdateExecutionPlanPreflight(ctx context.Context, id uint64, status string, preflightResult []byte) error
 	UpdateExecutionPlanExecutedAt(ctx context.Context, id uint64, status string, executedAt *time.Time) error
+	CountExecutionPlansByStrategySince(ctx context.Context, strategyName string, since time.Time) (int64, error)
 	InsertFill(ctx context.Context, item *models.Fill) error
 	ListFillsByPlanID(ctx context.Context, planID uint64) ([]models.Fill, error)
 	UpsertPnLRecord(ctx context.Context, item *models.PnLRecord) error
 	GetPnLRecordByPlanID(ctx context.Context, planID uint64) (*models.PnLRecord, error)
 	SumRealizedPnLSince(ctx context.Context, since time.Time) (decimal.Decimal, error)
+
+	// Automation rules (L7)
+	UpsertExecutionRule(ctx context.Context, item *models.ExecutionRule) error
+	GetExecutionRuleByStrategyName(ctx context.Context, strategyName string) (*models.ExecutionRule, error)
+	ListExecutionRules(ctx context.Context) ([]models.ExecutionRule, error)
+	DeleteExecutionRuleByStrategyName(ctx context.Context, strategyName string) error
+
+	// Trade journal (L7)
+	InsertTradeJournal(ctx context.Context, item *models.TradeJournal) error
+	GetTradeJournalByPlanID(ctx context.Context, planID uint64) (*models.TradeJournal, error)
+	UpdateTradeJournalExit(ctx context.Context, planID uint64, updates map[string]any) error
+	UpdateTradeJournalNotes(ctx context.Context, planID uint64, notes string, tags []byte, reviewedAt *time.Time) error
+	ListTradeJournals(ctx context.Context, params ListTradeJournalParams) ([]models.TradeJournal, error)
+	CountTradeJournals(ctx context.Context, params ListTradeJournalParams) (int64, error)
+
+	// System settings (L8)
+	UpsertSystemSetting(ctx context.Context, item *models.SystemSetting) error
+	GetSystemSettingByKey(ctx context.Context, key string) (*models.SystemSetting, error)
+	ListSystemSettings(ctx context.Context, params ListSystemSettingsParams) ([]models.SystemSetting, error)
+	CountSystemSettings(ctx context.Context, params ListSystemSettingsParams) (int64, error)
 
 	// Settlement history (L6 support for systematic strategies)
 	UpsertMarketSettlementHistory(ctx context.Context, item *models.MarketSettlementHistory) error
@@ -208,6 +229,26 @@ type ListExecutionPlansParams struct {
 	Limit   int
 	Offset  int
 	Status  *string
+	OrderBy string
+	Asc     *bool
+}
+
+type ListTradeJournalParams struct {
+	Limit        int
+	Offset       int
+	StrategyName *string
+	Outcome      *string
+	Since        *time.Time
+	Until        *time.Time
+	Tags         []string
+	OrderBy      string
+	Asc          *bool
+}
+
+type ListSystemSettingsParams struct {
+	Limit   int
+	Offset  int
+	Prefix  *string
 	OrderBy string
 	Asc     *bool
 }

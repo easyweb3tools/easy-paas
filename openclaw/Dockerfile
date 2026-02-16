@@ -51,7 +51,7 @@ RUN rm -rf \
 FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates tzdata curl python3 \
+    ca-certificates tzdata curl python3 git \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=openclaw_build /usr/local/bin/openclaw /usr/local/bin/openclaw

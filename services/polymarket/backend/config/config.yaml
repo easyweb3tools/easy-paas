@@ -47,44 +47,36 @@ clob_rest:
 
 # === V2 additions (docs/architecture-v2.md) ===
 strategy_engine:
-  enabled: false
   scan_interval: "5s"
   max_opportunities: 100
 
 signal_sources:
   binance_ws:
-    enabled: false
     url: "wss://stream.binance.com:9443/ws/btcusdt@depth20@100ms"
     symbol: "BTCUSDT"
   binance_price:
-    enabled: false
     endpoint: "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
     poll_interval: "2s"
     window_seconds: 300
     trigger_pct: 2.0
   weather_api:
-    enabled: false
     sources: []
     cities: []
   news_rss:
-    enabled: false
     poll_interval: "2m"
     feeds: []
     keywords: []
   price_change:
-    enabled: false
     interval: "5s"
     min_jump_bps: 500
     max_spread_bps: 400
     limit: 50
   orderbook_pattern:
-    enabled: false
     interval: "10s"
     min_spread_bps: 400
     min_jump_bps: 600
     limit: 100
   certainty_sweep:
-    enabled: false
     interval: "30s"
     hours_to_expiry: 6
     limit: 50
@@ -101,14 +93,19 @@ risk:
   require_preflight_pass: false
 
 labeler:
-  enabled: false
   scan_interval: "5m"
 
 settlement_ingest:
-  enabled: false
   scan_interval: "6h"
   lookback_days: 14
   batch_size: 200
+
+auto_executor:
+  scan_interval: "10s"
+  max_opportunities: 100
+  default_min_confidence: 0.8
+  default_min_edge_pct: 0.05
+  dry_run: true
 
 # Strategy defaults are applied only when the strategy row is first created.
 strategy_defaults:

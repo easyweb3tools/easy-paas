@@ -12,6 +12,12 @@ CFG_PATH="${OPENCLAW_STATE_DIR}/openclaw.json"
 mkdir -p "${WS_DIR}/skills"
 mkdir -p "${EASYWEB3_DIR}"
 
+# Git defaults for non-interactive commits inside the OpenClaw workspace.
+# Operators can override via OPENCLAW_GIT_USER_NAME / OPENCLAW_GIT_USER_EMAIL.
+git config --global --replace-all user.name "${OPENCLAW_GIT_USER_NAME:-openclaw}" >/dev/null 2>&1 || true
+git config --global --replace-all user.email "${OPENCLAW_GIT_USER_EMAIL:-openclaw@local}" >/dev/null 2>&1 || true
+git config --global --add safe.directory "${WS_DIR}" >/dev/null 2>&1 || true
+
 # If no OpenClaw config exists yet, create a minimal schema-valid config.
 # Note: OpenClaw validates config strictly; unknown keys will prevent startup.
 if [ ! -f "${CFG_PATH}" ]; then

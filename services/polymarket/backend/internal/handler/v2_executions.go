@@ -14,11 +14,13 @@ import (
 	"polymarket/internal/paas"
 	"polymarket/internal/repository"
 	"polymarket/internal/risk"
+	"polymarket/internal/service"
 )
 
 type V2ExecutionHandler struct {
-	Repo repository.Repository
-	Risk *risk.Manager
+	Repo    repository.Repository
+	Risk    *risk.Manager
+	Journal *service.JournalService
 }
 
 type planLegTarget struct {
@@ -207,6 +209,9 @@ func (h *V2ExecutionHandler) markExecuting(c *gin.Context) {
 	}
 	_ = h.Repo.UpdateExecutionPlanStatus(c.Request.Context(), id, "executing")
 	_ = h.Repo.UpdateOpportunityStatus(c.Request.Context(), plan.OpportunityID, "executing")
+	if h.Journal != nil {
+		_ = h.Journal.CaptureEntry(c.Request.Context(), id)
+	}
 	paas.LogBestEffort(c, "polymarket_execution_mark_executing", "info", map[string]any{
 		"plan_id":        id,
 		"opportunity_id": plan.OpportunityID,
@@ -539,6 +544,9 @@ func (h *V2ExecutionHandler) settle(c *gin.Context) {
 		"outcome":        rec.Outcome,
 		"settled_at":     settledAt.Format(time.RFC3339),
 	})
+	if h.Journal != nil {
+		_ = h.Journal.CaptureExit(c.Request.Context(), id)
+	}
 	Ok(c, rec, nil)
 }
 

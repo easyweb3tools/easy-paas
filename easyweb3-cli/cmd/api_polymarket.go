@@ -253,6 +253,88 @@ func apiPolymarketCmd(ctx Context, args []string) error {
 		}
 		return polymarketDo(ctx, http.MethodPost, "/api/v2/executions/"+strings.TrimSpace(*planID)+"/settle", anyBody)
 
+	case "switches":
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/system-settings/switches", nil)
+
+	case "switch-get":
+		if len(args) < 2 {
+			return errors.New("usage: easyweb3 api polymarket switch-get <name>")
+		}
+		name := strings.TrimSpace(args[1])
+		if name == "" {
+			return errors.New("name required")
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/system-settings/switches/"+urlQueryEscape(name), nil)
+
+	case "switch-enable":
+		if len(args) < 2 {
+			return errors.New("usage: easyweb3 api polymarket switch-enable <name>")
+		}
+		name := strings.TrimSpace(args[1])
+		if name == "" {
+			return errors.New("name required")
+		}
+		return polymarketDo(ctx, http.MethodPut, "/api/v2/system-settings/switches/"+urlQueryEscape(name), map[string]any{"enabled": true})
+
+	case "switch-disable":
+		if len(args) < 2 {
+			return errors.New("usage: easyweb3 api polymarket switch-disable <name>")
+		}
+		name := strings.TrimSpace(args[1])
+		if name == "" {
+			return errors.New("name required")
+		}
+		return polymarketDo(ctx, http.MethodPut, "/api/v2/system-settings/switches/"+urlQueryEscape(name), map[string]any{"enabled": false})
+
+	case "switch-set":
+		fs := flag.NewFlagSet("easyweb3 api polymarket switch-set", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		name := fs.String("name", "", "switch name, e.g. auto_executor")
+		enabled := fs.String("enabled", "", "true|false")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*name) == "" {
+			return errors.New("--name required")
+		}
+		val := strings.ToLower(strings.TrimSpace(*enabled))
+		if val != "true" && val != "false" {
+			return errors.New("--enabled must be true or false")
+		}
+		return polymarketDo(ctx, http.MethodPut, "/api/v2/system-settings/switches/"+urlQueryEscape(strings.TrimSpace(*name)), map[string]any{
+			"enabled": val == "true",
+		})
+
+	case "setting-get":
+		if len(args) < 2 {
+			return errors.New("usage: easyweb3 api polymarket setting-get <key>")
+		}
+		key := strings.TrimSpace(args[1])
+		if key == "" {
+			return errors.New("key required")
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/system-settings/"+urlQueryEscape(key), nil)
+
+	case "setting-set":
+		fs := flag.NewFlagSet("easyweb3 api polymarket setting-set", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		key := fs.String("key", "", "setting key")
+		value := fs.String("value", "", "json value, e.g. true or {\"k\":1}")
+		desc := fs.String("desc", "", "description")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*key) == "" {
+			return errors.New("--key required")
+		}
+		if strings.TrimSpace(*value) == "" {
+			return errors.New("--value required (json)")
+		}
+		var parsed any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(*value)), &parsed); err != nil {
+			return errors.New("--value must be valid json")
+		}
+		return polymarketDo(ctx, http.MethodPut, "/api/v2/system-settings/"+urlQueryEscape(strings.TrimSpace(*key)), map[string]any{
+			"value":       parsed,
+			"description": strings.TrimSpace(*desc),
+		})
+
 	default:
 		return fmt.Errorf("unknown polymarket operation: %s", args[0])
 	}

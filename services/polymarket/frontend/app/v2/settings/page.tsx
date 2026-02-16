@@ -19,7 +19,7 @@ export default function SettingsPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-          这里是最小化的运行配置提示页。所有参数以 backend 的 `config.yaml` 和环境变量为准。
+          这里是最小化的运行配置提示页。运行开关以后端数据库 `system_settings`（`feature.*`）为准，可通过 API/CLI 动态修改。
         </p>
       </section>
 

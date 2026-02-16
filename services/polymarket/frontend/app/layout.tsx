@@ -30,6 +30,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <NavLink href="/v2/opportunities" label="Opportunities" />
                 <NavLink href="/v2/strategies" label="Strategies" />
                 <NavLink href="/v2/executions" label="Executions" />
+                <NavLink href="/v2/automation" label="Automation" />
+                <NavLink href="/v2/journal" label="Journal" />
                 <NavLink href="/v2/analytics" label="Analytics" />
                 <NavLink href="/v2/signals" label="Signals" />
                 <NavLink href="/v2/labels" label="Labels" />
