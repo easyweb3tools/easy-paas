@@ -108,7 +108,7 @@ services:
     image: ${EASYWEB3_OPENCLAW_IMAGE:-easyweb3-openclaw:local}
     build:
       context: .
-      dockerfile: ./openclaw.Dockerfile
+      dockerfile: ./openclaw/Dockerfile
     environment:
       EASYWEB3_API_BASE: "http://easyweb3-platform:8080"
       EASYWEB3_PROJECT: "polymarket"
