@@ -31,6 +31,10 @@ Go implementation of the easyweb3 PaaS MVP described in `docs/ARCHITECTURE.md`.
   - `GET /api/v1/service/list`
   - `GET /api/v1/service/health?name=...`
   - `GET /api/v1/service/docs?name=...` (fetches upstream markdown when `docs_path` is configured)
+- Public docs
+  - `GET /docs`
+  - `GET /docs/<name>` or `GET /docs/<name>.md`
+  - Image default docs dir: `/app/public-docs` (can still be overridden by `EASYWEB3_DOCS_DIR`)
 
 Storage (MVP):
 - API keys: JSON file (`./data/api_keys.json`) storing SHA-256 hashes.
