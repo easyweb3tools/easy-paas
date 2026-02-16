@@ -19,6 +19,11 @@ const (
 	FeatureLabeler            = "feature.labeler"
 	FeatureSettlementIngest   = "feature.settlement_ingest"
 	FeatureAutoExecutor       = "feature.auto_executor"
+	FeaturePositionSync       = "feature.position_sync"
+	FeaturePortfolioSnapshot  = "feature.portfolio_snapshot"
+	FeaturePositionManager    = "feature.position_manager"
+	FeatureDailyStats         = "feature.daily_stats"
+	FeatureMarketReview       = "feature.market_review"
 	FeatureSignalBinanceWS    = "feature.signal.binance_ws"
 	FeatureSignalBinancePrice = "feature.signal.binance_price"
 	FeatureSignalWeatherAPI   = "feature.signal.weather_api"
@@ -35,6 +40,11 @@ func DefaultFeatureSwitches() map[string]bool {
 		FeatureLabeler:            false,
 		FeatureSettlementIngest:   false,
 		FeatureAutoExecutor:       false,
+		FeaturePositionSync:       true,
+		FeaturePortfolioSnapshot:  true,
+		FeaturePositionManager:    false,
+		FeatureDailyStats:         true,
+		FeatureMarketReview:       true,
 		FeatureSignalBinanceWS:    false,
 		FeatureSignalBinancePrice: false,
 		FeatureSignalWeatherAPI:   false,

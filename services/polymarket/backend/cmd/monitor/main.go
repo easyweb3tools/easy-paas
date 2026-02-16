@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
@@ -128,15 +129,38 @@ func main() {
 	v2Labels := &handler.V2LabelHandler{Repo: store, Labeler: marketLabeler}
 	v2Labels.Register(engine)
 	journalSvc := &service.JournalService{Repo: store}
+	positionSyncSvc := &service.PositionSyncService{Repo: store, Logger: logger, Flags: settingsSvc}
+	execMode := "live"
+	if cfg.AutoExecutor.DryRun {
+		execMode = "dry-run"
+	}
+	clobExecutor := &service.CLOBExecutor{
+		Repo:         store,
+		Risk:         riskMgr,
+		Logger:       logger,
+		PositionSync: positionSyncSvc,
+		Config: service.ExecutorConfig{
+			Mode:                 execMode,
+			MaxOrderSizeUSD:      decimal.Zero,
+			SlippageToleranceBps: 200,
+		},
+	}
+	v2Positions := &handler.V2PositionHandler{Repo: store}
+	v2Positions.Register(engine)
 	v2Exec := &handler.V2ExecutionHandler{Repo: store, Risk: riskMgr}
 	v2Exec.Journal = journalSvc
+	v2Exec.PositionSync = positionSyncSvc
 	v2Exec.Register(engine)
 	v2Analytics := &handler.V2AnalyticsHandler{Repo: store}
 	v2Analytics.Register(engine)
+	v2Review := &handler.V2ReviewHandler{Repo: store}
+	v2Review.Register(engine)
 	v2Settlements := &handler.V2SettlementHandler{Repo: store}
 	v2Settlements.Register(engine)
 	v2Rules := &handler.V2ExecutionRuleHandler{Repo: store}
 	v2Rules.Register(engine)
+	v2Orders := &handler.V2OrderHandler{Repo: store, Executor: clobExecutor}
+	v2Orders.Register(engine)
 	v2Journal := &handler.V2JournalHandler{Repo: store}
 	v2Journal.Register(engine)
 	v2Settings := &handler.V2SystemSettingsHandler{Repo: store, Settings: settingsSvc}
@@ -233,6 +257,33 @@ func main() {
 	})
 	if err != nil {
 		logger.Warn("cron register catalog sync failed", zap.Error(err))
+	}
+
+	_, err = cronRunner.Add("@every 30s", func(ctx context.Context) {
+		if err := positionSyncSvc.RefreshOpenPositionsPrices(ctx); err != nil {
+			logger.Warn("position price refresh failed", zap.Error(err))
+		}
+	})
+	if err != nil {
+		logger.Warn("cron register position refresh failed", zap.Error(err))
+	}
+
+	_, err = cronRunner.Add("@every 1h", func(ctx context.Context) {
+		if err := positionSyncSvc.SnapshotPortfolio(ctx); err != nil {
+			logger.Warn("portfolio snapshot failed", zap.Error(err))
+		}
+	})
+	if err != nil {
+		logger.Warn("cron register portfolio snapshot failed", zap.Error(err))
+	}
+
+	_, err = cronRunner.Add("@every 5s", func(ctx context.Context) {
+		if err := clobExecutor.PollOrders(ctx); err != nil {
+			logger.Warn("order poll failed", zap.Error(err))
+		}
+	})
+	if err != nil {
+		logger.Warn("cron register order poll failed", zap.Error(err))
 	}
 	cronRunner.Start()
 	defer cronRunner.Stop()
@@ -404,6 +455,39 @@ func main() {
 	go func() {
 		if err := auto.Run(baseCtx); err != nil && !errors.Is(err, context.Canceled) {
 			logger.Warn("auto executor stopped", zap.Error(err))
+		}
+	}()
+
+	positionManager := &service.PositionManager{
+		Repo:   store,
+		Logger: logger,
+		Flags:  settingsSvc,
+	}
+	go func() {
+		if err := positionManager.Run(baseCtx, 30*time.Second); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Warn("position manager stopped", zap.Error(err))
+		}
+	}()
+
+	dailyStats := &service.DailyStatsService{
+		Repo:   store,
+		Logger: logger,
+		Flags:  settingsSvc,
+	}
+	go func() {
+		if err := dailyStats.Run(baseCtx, 6*time.Hour); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Warn("daily stats service stopped", zap.Error(err))
+		}
+	}()
+
+	reviewSvc := &service.ReviewService{
+		Repo:   store,
+		Logger: logger,
+		Flags:  settingsSvc,
+	}
+	go func() {
+		if err := reviewSvc.Run(baseCtx, 6*time.Hour); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Warn("review service stopped", zap.Error(err))
 		}
 	}()
 

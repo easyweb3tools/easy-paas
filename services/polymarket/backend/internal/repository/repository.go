@@ -132,10 +132,49 @@ type Repository interface {
 	ListSystemSettings(ctx context.Context, params ListSystemSettingsParams) ([]models.SystemSetting, error)
 	CountSystemSettings(ctx context.Context, params ListSystemSettingsParams) (int64, error)
 
+	// Positions & portfolio (L8)
+	UpsertPosition(ctx context.Context, item *models.Position) error
+	GetPositionByID(ctx context.Context, id uint64) (*models.Position, error)
+	GetPositionByTokenID(ctx context.Context, tokenID string) (*models.Position, error)
+	ListPositions(ctx context.Context, params ListPositionsParams) ([]models.Position, error)
+	CountPositions(ctx context.Context, params ListPositionsParams) (int64, error)
+	ListOpenPositions(ctx context.Context) ([]models.Position, error)
+	ClosePosition(ctx context.Context, id uint64, realizedPnL decimal.Decimal, closedAt time.Time) error
+	PositionsSummary(ctx context.Context) (PositionsSummary, error)
+
+	InsertPortfolioSnapshot(ctx context.Context, item *models.PortfolioSnapshot) error
+	ListPortfolioSnapshots(ctx context.Context, params ListPortfolioSnapshotsParams) ([]models.PortfolioSnapshot, error)
+
+	// Orders (L8)
+	InsertOrder(ctx context.Context, item *models.Order) error
+	GetOrderByID(ctx context.Context, id uint64) (*models.Order, error)
+	ListOrders(ctx context.Context, params ListOrdersParams) ([]models.Order, error)
+	CountOrders(ctx context.Context, params ListOrdersParams) (int64, error)
+	UpdateOrderStatus(ctx context.Context, id uint64, status string, updates map[string]any) error
+
+	// Strategy deep analytics (L9)
+	UpsertStrategyDailyStats(ctx context.Context, item *models.StrategyDailyStats) error
+	ListStrategyDailyStats(ctx context.Context, params ListDailyStatsParams) ([]models.StrategyDailyStats, error)
+	AttributionByStrategy(ctx context.Context, strategyName string, since, until *time.Time) (AttributionResult, error)
+	PortfolioDrawdown(ctx context.Context) (DrawdownResult, error)
+	StrategyCorrelation(ctx context.Context, since, until *time.Time) ([]CorrelationRow, error)
+	PerformanceRatios(ctx context.Context, since, until *time.Time) (RatiosResult, error)
+	RebuildStrategyDailyStats(ctx context.Context, since, until *time.Time) (int, error)
+
 	// Settlement history (L6 support for systematic strategies)
 	UpsertMarketSettlementHistory(ctx context.Context, item *models.MarketSettlementHistory) error
 	ListMarketSettlementHistoryByMarketIDs(ctx context.Context, marketIDs []string) ([]models.MarketSettlementHistory, error)
+	ListRecentMarketSettlementHistory(ctx context.Context, since time.Time, limit int) ([]models.MarketSettlementHistory, error)
 	ListLabelNoRateStats(ctx context.Context, labels []string) ([]LabelNoRateRow, error)
+
+	// Market review (L9)
+	UpsertMarketReview(ctx context.Context, item *models.MarketReview) error
+	GetMarketReviewByMarketID(ctx context.Context, marketID string) (*models.MarketReview, error)
+	ListMarketReviews(ctx context.Context, params ListMarketReviewParams) ([]models.MarketReview, error)
+	CountMarketReviews(ctx context.Context, params ListMarketReviewParams) (int64, error)
+	MissedAlphaSummary(ctx context.Context) (MissedAlphaSummary, error)
+	LabelPerformance(ctx context.Context) ([]LabelPerformanceRow, error)
+	UpdateMarketReviewNotes(ctx context.Context, id uint64, notes string, lessonTags []byte) error
 
 	// Analytics queries (L6)
 	AnalyticsOverview(ctx context.Context) (AnalyticsOverview, error)
@@ -251,6 +290,112 @@ type ListSystemSettingsParams struct {
 	Prefix  *string
 	OrderBy string
 	Asc     *bool
+}
+
+type ListPositionsParams struct {
+	Limit        int
+	Offset       int
+	Status       *string
+	StrategyName *string
+	MarketID     *string
+	OrderBy      string
+	Asc          *bool
+}
+
+type ListPortfolioSnapshotsParams struct {
+	Limit  int
+	Offset int
+	Since  *time.Time
+	Until  *time.Time
+}
+
+type PositionsSummary struct {
+	TotalOpen      int64
+	TotalCostBasis float64
+	TotalMarketVal float64
+	UnrealizedPnL  float64
+	RealizedPnL    float64
+	NetLiquidation float64
+}
+
+type ListOrdersParams struct {
+	Limit   int
+	Offset  int
+	Status  *string
+	PlanID  *uint64
+	TokenID *string
+	OrderBy string
+	Asc     *bool
+}
+
+type ListDailyStatsParams struct {
+	Limit        int
+	Offset       int
+	StrategyName *string
+	Since        *time.Time
+	Until        *time.Time
+}
+
+type AttributionResult struct {
+	EdgeContribution float64
+	SlippageCost     float64
+	FeeCost          float64
+	TimingValue      float64
+	NetPnL           float64
+}
+
+type DrawdownResult struct {
+	MaxDrawdownUSD       float64
+	MaxDrawdownPct       float64
+	DrawdownDurationDays int
+	CurrentDrawdownUSD   float64
+	PeakPnL              float64
+	TroughPnL            float64
+}
+
+type CorrelationRow struct {
+	StrategyA   string
+	StrategyB   string
+	Correlation float64
+}
+
+type RatiosResult struct {
+	SharpeRatio  float64
+	SortinoRatio float64
+	WinRate      float64
+	ProfitFactor float64
+	AvgWin       float64
+	AvgLoss      float64
+	Expectancy   float64
+}
+
+type ListMarketReviewParams struct {
+	Limit        int
+	Offset       int
+	OurAction    *string
+	StrategyName *string
+	Since        *time.Time
+	Until        *time.Time
+	MinPnL       *decimal.Decimal
+	OrderBy      string
+	Asc          *bool
+}
+
+type MissedAlphaSummary struct {
+	TotalDismissed      int64
+	ProfitableDismissed int64
+	RegretRate          float64
+	MissedAlphaUSD      float64
+	AvgMissedEdge       float64
+}
+
+type LabelPerformanceRow struct {
+	Label       string
+	TradedCount int64
+	TradedPnL   float64
+	MissedCount int64
+	MissedAlpha float64
+	WinRate     float64
 }
 
 type AnalyticsOverview struct {

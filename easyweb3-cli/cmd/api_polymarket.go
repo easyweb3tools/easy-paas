@@ -253,6 +253,227 @@ func apiPolymarketCmd(ctx Context, args []string) error {
 		}
 		return polymarketDo(ctx, http.MethodPost, "/api/v2/executions/"+strings.TrimSpace(*planID)+"/settle", anyBody)
 
+	case "execution-submit":
+		if len(args) < 2 {
+			return errors.New("usage: easyweb3 api polymarket execution-submit <id>")
+		}
+		id := strings.TrimSpace(args[1])
+		if id == "" {
+			return errors.New("id required")
+		}
+		return polymarketDo(ctx, http.MethodPost, "/api/v2/executions/"+id+"/submit", map[string]any{})
+
+	case "orders":
+		fs := flag.NewFlagSet("easyweb3 api polymarket orders", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		limit := fs.Int("limit", 50, "limit")
+		offset := fs.Int("offset", 0, "offset")
+		status := fs.String("status", "", "status")
+		planID := fs.String("plan-id", "", "plan id")
+		tokenID := fs.String("token-id", "", "token id")
+		_ = fs.Parse(args[1:])
+		q := fmt.Sprintf("?limit=%d&offset=%d", *limit, *offset)
+		if strings.TrimSpace(*status) != "" {
+			q += "&status=" + urlQueryEscape(strings.TrimSpace(*status))
+		}
+		if strings.TrimSpace(*planID) != "" {
+			q += "&plan_id=" + urlQueryEscape(strings.TrimSpace(*planID))
+		}
+		if strings.TrimSpace(*tokenID) != "" {
+			q += "&token_id=" + urlQueryEscape(strings.TrimSpace(*tokenID))
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/orders"+q, nil)
+
+	case "order-get":
+		if len(args) < 2 {
+			return errors.New("usage: easyweb3 api polymarket order-get <id>")
+		}
+		id := strings.TrimSpace(args[1])
+		if id == "" {
+			return errors.New("id required")
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/orders/"+id, nil)
+
+	case "order-cancel":
+		if len(args) < 2 {
+			return errors.New("usage: easyweb3 api polymarket order-cancel <id>")
+		}
+		id := strings.TrimSpace(args[1])
+		if id == "" {
+			return errors.New("id required")
+		}
+		return polymarketDo(ctx, http.MethodPost, "/api/v2/orders/"+id+"/cancel", map[string]any{})
+
+	case "positions":
+		fs := flag.NewFlagSet("easyweb3 api polymarket positions", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		limit := fs.Int("limit", 50, "limit")
+		offset := fs.Int("offset", 0, "offset")
+		status := fs.String("status", "", "open|closed")
+		strategy := fs.String("strategy", "", "strategy_name")
+		marketID := fs.String("market-id", "", "market id")
+		_ = fs.Parse(args[1:])
+		q := fmt.Sprintf("?limit=%d&offset=%d", *limit, *offset)
+		if strings.TrimSpace(*status) != "" {
+			q += "&status=" + urlQueryEscape(strings.TrimSpace(*status))
+		}
+		if strings.TrimSpace(*strategy) != "" {
+			q += "&strategy_name=" + urlQueryEscape(strings.TrimSpace(*strategy))
+		}
+		if strings.TrimSpace(*marketID) != "" {
+			q += "&market_id=" + urlQueryEscape(strings.TrimSpace(*marketID))
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/positions"+q, nil)
+
+	case "position-get":
+		if len(args) < 2 {
+			return errors.New("usage: easyweb3 api polymarket position-get <id>")
+		}
+		id := strings.TrimSpace(args[1])
+		if id == "" {
+			return errors.New("id required")
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/positions/"+id, nil)
+
+	case "portfolio-summary":
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/positions/summary", nil)
+
+	case "portfolio-history":
+		fs := flag.NewFlagSet("easyweb3 api polymarket portfolio-history", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		limit := fs.Int("limit", 168, "limit")
+		offset := fs.Int("offset", 0, "offset")
+		since := fs.String("since", "", "RFC3339")
+		until := fs.String("until", "", "RFC3339")
+		_ = fs.Parse(args[1:])
+		q := fmt.Sprintf("?limit=%d&offset=%d", *limit, *offset)
+		if strings.TrimSpace(*since) != "" {
+			q += "&since=" + urlQueryEscape(strings.TrimSpace(*since))
+		}
+		if strings.TrimSpace(*until) != "" {
+			q += "&until=" + urlQueryEscape(strings.TrimSpace(*until))
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/portfolio/history"+q, nil)
+
+	case "analytics-daily":
+		fs := flag.NewFlagSet("easyweb3 api polymarket analytics-daily", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		limit := fs.Int("limit", 365, "limit")
+		offset := fs.Int("offset", 0, "offset")
+		strategy := fs.String("strategy", "", "strategy_name")
+		since := fs.String("since", "", "RFC3339")
+		until := fs.String("until", "", "RFC3339")
+		_ = fs.Parse(args[1:])
+		q := fmt.Sprintf("?limit=%d&offset=%d", *limit, *offset)
+		if strings.TrimSpace(*strategy) != "" {
+			q += "&strategy_name=" + urlQueryEscape(strings.TrimSpace(*strategy))
+		}
+		if strings.TrimSpace(*since) != "" {
+			q += "&since=" + urlQueryEscape(strings.TrimSpace(*since))
+		}
+		if strings.TrimSpace(*until) != "" {
+			q += "&until=" + urlQueryEscape(strings.TrimSpace(*until))
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/analytics/daily"+q, nil)
+
+	case "analytics-attribution":
+		fs := flag.NewFlagSet("easyweb3 api polymarket analytics-attribution", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		name := fs.String("strategy", "", "strategy name")
+		since := fs.String("since", "", "RFC3339")
+		until := fs.String("until", "", "RFC3339")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*name) == "" {
+			return errors.New("--strategy required")
+		}
+		q := ""
+		if strings.TrimSpace(*since) != "" || strings.TrimSpace(*until) != "" {
+			q = "?"
+			first := true
+			if strings.TrimSpace(*since) != "" {
+				q += "since=" + urlQueryEscape(strings.TrimSpace(*since))
+				first = false
+			}
+			if strings.TrimSpace(*until) != "" {
+				if !first {
+					q += "&"
+				}
+				q += "until=" + urlQueryEscape(strings.TrimSpace(*until))
+			}
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/analytics/strategy/"+urlQueryEscape(strings.TrimSpace(*name))+"/attribution"+q, nil)
+
+	case "analytics-drawdown":
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/analytics/drawdown", nil)
+
+	case "analytics-correlation":
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/analytics/correlation", nil)
+
+	case "analytics-ratios":
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/analytics/ratios", nil)
+
+	case "review":
+		fs := flag.NewFlagSet("easyweb3 api polymarket review", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		limit := fs.Int("limit", 100, "limit")
+		offset := fs.Int("offset", 0, "offset")
+		ourAction := fs.String("our-action", "", "traded|dismissed|expired|missed")
+		strategy := fs.String("strategy", "", "strategy_name")
+		since := fs.String("since", "", "RFC3339")
+		until := fs.String("until", "", "RFC3339")
+		_ = fs.Parse(args[1:])
+		q := fmt.Sprintf("?limit=%d&offset=%d", *limit, *offset)
+		if strings.TrimSpace(*ourAction) != "" {
+			q += "&our_action=" + urlQueryEscape(strings.TrimSpace(*ourAction))
+		}
+		if strings.TrimSpace(*strategy) != "" {
+			q += "&strategy_name=" + urlQueryEscape(strings.TrimSpace(*strategy))
+		}
+		if strings.TrimSpace(*since) != "" {
+			q += "&since=" + urlQueryEscape(strings.TrimSpace(*since))
+		}
+		if strings.TrimSpace(*until) != "" {
+			q += "&until=" + urlQueryEscape(strings.TrimSpace(*until))
+		}
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/review"+q, nil)
+
+	case "review-missed":
+		fs := flag.NewFlagSet("easyweb3 api polymarket review-missed", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		limit := fs.Int("limit", 100, "limit")
+		offset := fs.Int("offset", 0, "offset")
+		_ = fs.Parse(args[1:])
+		q := fmt.Sprintf("?limit=%d&offset=%d", *limit, *offset)
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/review/missed"+q, nil)
+
+	case "review-regret-index":
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/review/regret-index", nil)
+
+	case "review-label-performance":
+		return polymarketDo(ctx, http.MethodGet, "/api/v2/review/label-performance", nil)
+
+	case "review-notes":
+		fs := flag.NewFlagSet("easyweb3 api polymarket review-notes", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		id := fs.String("id", "", "review id")
+		notes := fs.String("notes", "", "notes")
+		lessonTags := fs.String("lesson-tags", "", "comma-separated lesson tags")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*id) == "" {
+			return errors.New("--id required")
+		}
+		var tags []string
+		for _, v := range strings.Split(strings.TrimSpace(*lessonTags), ",") {
+			tag := strings.TrimSpace(v)
+			if tag != "" {
+				tags = append(tags, tag)
+			}
+		}
+		return polymarketDo(ctx, http.MethodPut, "/api/v2/review/"+urlQueryEscape(strings.TrimSpace(*id))+"/notes", map[string]any{
+			"notes":       strings.TrimSpace(*notes),
+			"lesson_tags": tags,
+		})
+
 	case "switches":
 		return polymarketDo(ctx, http.MethodGet, "/api/v2/system-settings/switches", nil)
 

@@ -15,6 +15,10 @@ type JournalItem = {
   ROI?: string | null;
   Notes: string;
   Tags?: string[] | null;
+  SignalSnapshot?: unknown;
+  MarketSnapshot?: unknown;
+  EntryParams?: unknown;
+  OutcomeSnapshot?: unknown;
   CreatedAt: string;
   UpdatedAt: string;
 };
@@ -27,6 +31,7 @@ export default function JournalPage() {
   const [strategy, setStrategy] = useState("");
   const [outcome, setOutcome] = useState("");
   const [editing, setEditing] = useState<Record<number, { notes: string; tags: string }>>({});
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
   const query = useMemo(() => {
     const q = new URLSearchParams();
@@ -154,6 +159,47 @@ export default function JournalPage() {
                       Save Notes
                     </button>
                   </div>
+                  <div className="mt-2">
+                    <button
+                      className="rounded-full border border-[color:var(--border)] px-3 py-1 text-xs hover:bg-[var(--surface-strong)]"
+                      onClick={() =>
+                        setExpanded((prev) => ({
+                          ...prev,
+                          [it.ExecutionPlanID]: !prev[it.ExecutionPlanID],
+                        }))
+                      }
+                    >
+                      {expanded[it.ExecutionPlanID] ? "Hide Decision Chain" : "Show Decision Chain"}
+                    </button>
+                  </div>
+                  {expanded[it.ExecutionPlanID] ? (
+                    <div className="mt-3 grid gap-2 text-[11px] md:grid-cols-2">
+                      <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3">
+                        <p className="mb-1 text-xs font-semibold">Signals</p>
+                        <pre className="overflow-auto whitespace-pre-wrap break-all text-[10px] text-[var(--muted)]">
+                          {JSON.stringify(it.SignalSnapshot ?? {}, null, 2)}
+                        </pre>
+                      </div>
+                      <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3">
+                        <p className="mb-1 text-xs font-semibold">Market At Entry</p>
+                        <pre className="overflow-auto whitespace-pre-wrap break-all text-[10px] text-[var(--muted)]">
+                          {JSON.stringify(it.MarketSnapshot ?? {}, null, 2)}
+                        </pre>
+                      </div>
+                      <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3">
+                        <p className="mb-1 text-xs font-semibold">Entry Params</p>
+                        <pre className="overflow-auto whitespace-pre-wrap break-all text-[10px] text-[var(--muted)]">
+                          {JSON.stringify(it.EntryParams ?? {}, null, 2)}
+                        </pre>
+                      </div>
+                      <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3">
+                        <p className="mb-1 text-xs font-semibold">Outcome / Execution</p>
+                        <pre className="overflow-auto whitespace-pre-wrap break-all text-[10px] text-[var(--muted)]">
+                          {JSON.stringify(it.OutcomeSnapshot ?? {}, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}

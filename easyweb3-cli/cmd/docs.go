@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ func docsCmd(ctx Context, args []string) error {
 	switch args[0] {
 	case "url":
 		if len(args) < 2 {
-			return errors.New("usage: easyweb3 docs url architecture|openclaw")
+			return errors.New("usage: easyweb3 docs url <name|name.md>")
 		}
 		u, err := docURL(ctx.APIBase, args[1])
 		if err != nil {
@@ -33,7 +34,7 @@ func docsCmd(ctx Context, args []string) error {
 		outPath := fs.String("out", "", "write to file (optional)")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() < 1 {
-			return errors.New("usage: easyweb3 docs get [--out file] architecture|openclaw")
+			return errors.New("usage: easyweb3 docs get [--out file] <name|name.md>")
 		}
 
 		u, err := docURL(ctx.APIBase, fs.Arg(0))
@@ -66,14 +67,21 @@ func docURL(apiBase, name string) (string, error) {
 	if base == "" {
 		return "", errors.New("--api-base is empty")
 	}
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "architecture", "arch":
-		return base + "/docs/architecture", nil
-	case "openclaw":
-		return base + "/docs/openclaw", nil
-	default:
-		return "", errors.New("unknown doc: " + name + " (expected architecture|openclaw)")
+	n := strings.TrimSpace(name)
+	if n == "" {
+		return "", errors.New("doc name is required")
 	}
+	switch strings.ToLower(n) {
+	case "architecture", "arch", "openclaw":
+		return base + "/docs/" + strings.ToLower(n), nil
+	}
+	if strings.Contains(n, "/") || strings.Contains(n, "\\") {
+		return "", errors.New("invalid doc name")
+	}
+	if !strings.HasSuffix(strings.ToLower(n), ".md") {
+		n += ".md"
+	}
+	return base + "/docs/" + url.PathEscape(n), nil
 }
 
 func httpGetRaw(url string) ([]byte, string, error) {

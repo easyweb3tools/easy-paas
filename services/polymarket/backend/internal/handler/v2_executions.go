@@ -18,9 +18,10 @@ import (
 )
 
 type V2ExecutionHandler struct {
-	Repo    repository.Repository
-	Risk    *risk.Manager
-	Journal *service.JournalService
+	Repo         repository.Repository
+	Risk         *risk.Manager
+	Journal      *service.JournalService
+	PositionSync *service.PositionSyncService
 }
 
 type planLegTarget struct {
@@ -642,6 +643,9 @@ func (h *V2ExecutionHandler) addFill(c *gin.Context) {
 	if err := h.Repo.InsertFill(c.Request.Context(), item); err != nil {
 		Error(c, http.StatusBadGateway, err.Error(), nil)
 		return
+	}
+	if h.PositionSync != nil {
+		_ = h.PositionSync.SyncFromFill(c.Request.Context(), *item)
 	}
 	paas.LogBestEffort(c, "polymarket_fill_added", "info", map[string]any{
 		"plan_id":   id,

@@ -69,6 +69,18 @@ func (s *JournalService) CaptureEntry(ctx context.Context, planID uint64) error 
 		trades, _ := s.Repo.ListLastTradePricesByTokenIDs(ctx, tokenIDs)
 		marketSnapshot["last_trade_prices"] = trades
 	}
+	fills, _ := s.Repo.ListFillsByPlanID(ctx, plan.ID)
+	marketSnapshot["execution"] = map[string]any{
+		"plan_id":      plan.ID,
+		"status":       plan.Status,
+		"strategy":     plan.StrategyName,
+		"opportunity":  plan.OpportunityID,
+		"created_at":   plan.CreatedAt,
+		"planned_legs": json.RawMessage(plan.Legs),
+		"params":       json.RawMessage(plan.Params),
+		"fills":        fills,
+		"fill_stats":   summarizeFills(fills),
+	}
 
 	signalRaw, _ := json.Marshal(signalSnapshot)
 	marketRaw, _ := json.Marshal(marketSnapshot)
@@ -114,12 +126,27 @@ func (s *JournalService) CaptureExit(ctx context.Context, planID uint64) error {
 		trades, _ := s.Repo.ListLastTradePricesByTokenIDs(ctx, tokenIDs)
 		outcomeSnapshot["last_trade_prices"] = trades
 	}
+	fills, _ := s.Repo.ListFillsByPlanID(ctx, plan.ID)
+	outcomeSnapshot["execution"] = map[string]any{
+		"plan_id":      plan.ID,
+		"status":       plan.Status,
+		"strategy":     plan.StrategyName,
+		"opportunity":  plan.OpportunityID,
+		"created_at":   plan.CreatedAt,
+		"executed_at":  plan.ExecutedAt,
+		"planned_legs": json.RawMessage(plan.Legs),
+		"params":       json.RawMessage(plan.Params),
+		"fills":        fills,
+		"fill_stats":   summarizeFills(fills),
+	}
+	outcomeSnapshot["pnl_record"] = rec
 	outcomeRaw, _ := json.Marshal(outcomeSnapshot)
 
 	exitReasoning := fmt.Sprintf("settled outcome=%s", strings.TrimSpace(rec.Outcome))
 	if rec.RealizedPnL != nil {
 		exitReasoning = fmt.Sprintf("%s pnl_usd=%s", exitReasoning, rec.RealizedPnL.String())
 	}
+	exitReasoning = fmt.Sprintf("%s fills=%d", exitReasoning, len(fills))
 	updates := map[string]any{
 		"outcome":          strings.TrimSpace(rec.Outcome),
 		"outcome_snapshot": datatypes.JSON(outcomeRaw),
@@ -172,3 +199,20 @@ func planTokenIDs(legsJSON []byte) []string {
 }
 
 func boolPtrJournal(v bool) *bool { return &v }
+
+func summarizeFills(fills []models.Fill) map[string]any {
+	totalFilled := 0.0
+	totalFee := 0.0
+	totalSlippage := 0.0
+	for _, f := range fills {
+		totalFilled += f.FilledSize.InexactFloat64()
+		totalFee += f.Fee.InexactFloat64()
+		totalSlippage += f.Slippage.InexactFloat64()
+	}
+	return map[string]any{
+		"count":          len(fills),
+		"total_size":     totalFilled,
+		"total_fee":      totalFee,
+		"total_slippage": totalSlippage,
+	}
+}

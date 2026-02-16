@@ -134,6 +134,15 @@ export default function ExecutionDetailPage() {
     }
   }
 
+  async function submitToClob() {
+    try {
+      await apiPost(`/api/v2/executions/${id}/submit`, {});
+      await refresh();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "unknown error");
+    }
+  }
+
   async function cancel() {
     try {
       await apiPost(`/api/v2/executions/${id}/cancel`, {});
@@ -201,6 +210,13 @@ export default function ExecutionDetailPage() {
               disabled={!canAct}
             >
               Mark Executing
+            </button>
+            <button
+              className="rounded-full border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-strong)]"
+              onClick={() => void submitToClob()}
+              disabled={!canAct}
+            >
+              Submit
             </button>
             <button
               className="rounded-full border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-strong)]"
