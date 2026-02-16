@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiMeta, apiGet, apiPut } from "@/lib/api";
+import { DEFAULTS } from "@/lib/constants";
 
 type ReviewItem = {
   ID: number;
@@ -57,24 +58,27 @@ export default function ReviewPage() {
   const [ourAction, setOurAction] = useState("");
   const [strategyName, setStrategyName] = useState("");
   const [editing, setEditing] = useState<Record<number, { notes: string; tags: string }>>({});
+  const loadingRef = useRef(false);
 
   const query = useMemo(() => {
     const q = new URLSearchParams();
-    q.set("limit", "100");
+    q.set("limit", String(DEFAULTS.PAGE_LIMIT));
     if (ourAction.trim()) q.set("our_action", ourAction.trim());
     if (strategyName.trim()) q.set("strategy_name", strategyName.trim());
     return q.toString();
   }, [ourAction, strategyName]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
       const [listRes, missedRes, summaryRes, labelsRes] = await Promise.all([
-        apiGet<ReviewItem[]>(`/api/v2/review?${query}`, { cache: "no-store" }),
-        apiGet<ReviewItem[]>("/api/v2/review/missed?limit=50", { cache: "no-store" }),
-        apiGet<MissedSummary>("/api/v2/review/regret-index", { cache: "no-store" }),
-        apiGet<LabelPerf[]>("/api/v2/review/label-performance", { cache: "no-store" }),
+        apiGet<ReviewItem[]>(`/api/v2/review?${query}`, { cache: "no-store", signal }),
+        apiGet<ReviewItem[]>("/api/v2/review/missed?limit=50", { cache: "no-store", signal }),
+        apiGet<MissedSummary>("/api/v2/review/regret-index", { cache: "no-store", signal }),
+        apiGet<LabelPerf[]>("/api/v2/review/label-performance", { cache: "no-store", signal }),
       ]);
       setItems(listRes.data ?? []);
       setMeta(listRes.meta);
@@ -91,14 +95,18 @@ export default function ReviewPage() {
       }
       setEditing(editState);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [query]);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   async function saveNotes(id: number) {
@@ -121,7 +129,7 @@ export default function ReviewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -153,27 +161,27 @@ export default function ReviewPage() {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)]">total_dismissed</div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <div className="text-xs text-[var(--muted)]">Total Dismissed</div>
           <div className="mt-1 text-xl font-semibold">{summary?.TotalDismissed ?? 0}</div>
         </div>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)]">profitable_dismissed</div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <div className="text-xs text-[var(--muted)]">Profitable Dismissed</div>
           <div className="mt-1 text-xl font-semibold">{summary?.ProfitableDismissed ?? 0}</div>
         </div>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)]">regret_rate</div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <div className="text-xs text-[var(--muted)]">Regret Rate</div>
           <div className="mt-1 text-xl font-semibold">{fmt((summary?.RegretRate ?? 0) * 100)}%</div>
         </div>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)]">missed_alpha_usd</div>
-          <div className="mt-1 text-xl font-semibold">${fmt(summary?.MissedAlphaUSD ?? 0)}</div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <div className="text-xs text-[var(--muted)]">Missed Alpha (USD)</div>
+          <div className="mt-1 text-xl font-semibold text-profit">${fmt(summary?.MissedAlphaUSD ?? 0)}</div>
         </div>
       </section>
 
-      <section className="glass-panel overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4 text-sm font-semibold">Missed Opportunities (top 50)</div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
@@ -197,11 +205,21 @@ export default function ReviewPage() {
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {missed.map((it) => (
+            <div key={`mm-${it.ID}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+              <div className="font-mono text-xs">{it.MarketID}</div>
+              <div className="mt-1 text-xs">{it.OurAction} · {it.StrategyName || "--"}</div>
+              <div className="mt-2 text-sm text-profit">${fmt(num(it.HypotheticalPnL))}</div>
+              <div className="mt-1 text-xs text-[var(--muted)]">{it.SettledAt ? new Date(it.SettledAt).toLocaleString() : "--"}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
-      <section className="glass-panel overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4 text-sm font-semibold">Label Performance</div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
@@ -218,18 +236,30 @@ export default function ReviewPage() {
                 <tr key={row.Label} className="border-t border-[color:var(--border)]">
                   <td className="px-4 py-3">{row.Label}</td>
                   <td className="px-4 py-3">{row.TradedCount}</td>
-                  <td className="px-4 py-3">${fmt(row.TradedPnL)}</td>
+                  <td className={row.TradedPnL >= 0 ? "px-4 py-3 text-profit" : "px-4 py-3 text-loss"}>${fmt(row.TradedPnL)}</td>
                   <td className="px-4 py-3">{row.MissedCount}</td>
-                  <td className="px-4 py-3">${fmt(row.MissedAlpha)}</td>
+                  <td className="px-4 py-3 text-profit">${fmt(row.MissedAlpha)}</td>
                   <td className="px-4 py-3">{fmt(row.WinRate * 100)}%</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {labels.map((row) => (
+            <div key={`lm-${row.Label}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+              <div className="font-medium">{row.Label}</div>
+              <div className="mt-1 text-xs text-[var(--muted)]">Traded {row.TradedCount} · Missed {row.MissedCount}</div>
+              <div className="mt-2 text-xs">
+                Traded P&L: <span className={row.TradedPnL >= 0 ? "text-profit" : "text-loss"}>${fmt(row.TradedPnL)}</span>
+              </div>
+              <div className="mt-1 text-xs">Missed Alpha: <span className="text-profit">${fmt(row.MissedAlpha)}</span></div>
+            </div>
+          ))}
+        </div>
       </section>
 
-      <section className="glass-panel overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4 text-sm font-semibold">All Reviews</div>
         <div className="divide-y divide-[color:var(--border)]">
           {items.map((it) => {
@@ -242,8 +272,8 @@ export default function ReviewPage() {
                     <span className="font-mono">{it.MarketID}</span>
                     <span>{it.OurAction}</span>
                     <span>{it.StrategyName || "--"}</span>
-                    <span>hypo=${fmt(num(it.HypotheticalPnL))}</span>
-                    <span>actual=${fmt(num(it.ActualPnL))}</span>
+                    <span>hypo=<span className={num(it.HypotheticalPnL) >= 0 ? "text-profit" : "text-loss"}>${fmt(num(it.HypotheticalPnL))}</span></span>
+                    <span>actual=<span className={num(it.ActualPnL) >= 0 ? "text-profit" : "text-loss"}>${fmt(num(it.ActualPnL))}</span></span>
                   </div>
                   <span className="text-[var(--muted)]">{it.SettledAt ? new Date(it.SettledAt).toLocaleString() : "--"}</span>
                 </div>

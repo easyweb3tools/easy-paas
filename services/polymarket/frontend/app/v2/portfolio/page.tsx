@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiGet } from "@/lib/api";
 
@@ -44,33 +44,40 @@ export default function PortfolioPage() {
   const [status, setStatus] = useState("open");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
       const [sum, pos, hist] = await Promise.all([
-        apiGet<Summary>("/api/v2/positions/summary", { cache: "no-store" }),
-        apiGet<Position[]>(`/api/v2/positions?limit=200&status=${status}`, { cache: "no-store" }),
-        apiGet<Snapshot[]>("/api/v2/portfolio/history?limit=168", { cache: "no-store" }),
+        apiGet<Summary>("/api/v2/positions/summary", { cache: "no-store", signal }),
+        apiGet<Position[]>(`/api/v2/positions?limit=200&status=${status}`, { cache: "no-store", signal }),
+        apiGet<Snapshot[]>("/api/v2/portfolio/history?limit=168", { cache: "no-store", signal }),
       ]);
       setSummary(sum.data);
       setPositions(pos.data ?? []);
       setHistory(hist.data ?? []);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [status]);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -88,15 +95,19 @@ export default function PortfolioPage() {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Open: {summary?.TotalOpen ?? 0}</div>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Cost: ${fmtNum(summary?.TotalCostBasis ?? 0)}</div>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Mkt Val: ${fmtNum(summary?.TotalMarketVal ?? 0)}</div>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Unrealized: ${fmtNum(summary?.UnrealizedPnL ?? 0)}</div>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Realized: ${fmtNum(summary?.RealizedPnL ?? 0)}</div>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Net Liq: ${fmtNum(summary?.NetLiquidation ?? 0)}</div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Open: {summary?.TotalOpen ?? 0}</div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Cost: ${fmtNum(summary?.TotalCostBasis ?? 0)}</div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Mkt Val: ${fmtNum(summary?.TotalMarketVal ?? 0)}</div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          Unrealized: <span className={(summary?.UnrealizedPnL ?? 0) >= 0 ? "text-profit" : "text-loss"}>${fmtNum(summary?.UnrealizedPnL ?? 0)}</span>
+        </div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          Realized: <span className={(summary?.RealizedPnL ?? 0) >= 0 ? "text-profit" : "text-loss"}>${fmtNum(summary?.RealizedPnL ?? 0)}</span>
+        </div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Net Liq: ${fmtNum(summary?.NetLiquidation ?? 0)}</div>
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <div className="flex items-center gap-3 text-xs">
             <span>Positions</span>
@@ -110,7 +121,7 @@ export default function PortfolioPage() {
             </select>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
@@ -133,16 +144,31 @@ export default function PortfolioPage() {
                   <td className="px-4 py-3">{fmtNum(p.Quantity, 4)}</td>
                   <td className="px-4 py-3">{fmtNum(p.AvgEntryPrice, 4)}</td>
                   <td className="px-4 py-3">{fmtNum(p.CurrentPrice, 4)}</td>
-                  <td className="px-4 py-3">${fmtNum(p.UnrealizedPnL, 2)}</td>
+                  <td className={Number(p.UnrealizedPnL) >= 0 ? "px-4 py-3 text-profit" : "px-4 py-3 text-loss"}>${fmtNum(p.UnrealizedPnL, 2)}</td>
                   <td className="px-4 py-3">{p.Status}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {positions.map((p) => (
+            <div key={`m-${p.ID}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs">{p.TokenID}</span>
+                <span className="text-xs">{p.Status}</span>
+              </div>
+              <div className="mt-1 text-xs text-[var(--muted)]">{p.Direction} · qty {fmtNum(p.Quantity, 4)}</div>
+              <div className="mt-1 text-xs">entry {fmtNum(p.AvgEntryPrice, 4)} · current {fmtNum(p.CurrentPrice, 4)}</div>
+              <div className={Number(p.UnrealizedPnL) >= 0 ? "mt-2 text-sm text-profit" : "mt-2 text-sm text-loss"}>
+                uPnL ${fmtNum(p.UnrealizedPnL, 2)}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] p-4">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
         <p className="text-xs text-[var(--muted)]">History points: {history.length}</p>
       </section>
     </div>

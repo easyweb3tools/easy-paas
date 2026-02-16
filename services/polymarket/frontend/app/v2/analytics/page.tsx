@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet } from "@/lib/api";
 
@@ -107,6 +107,8 @@ export default function AnalyticsPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const rangeQuery = useMemo(() => {
     const q = new URLSearchParams();
@@ -118,18 +120,25 @@ export default function AnalyticsPage() {
   }, [sinceDate, untilDate]);
 
   const refresh = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const signal = controller.signal;
     setLoading(true);
     setError(null);
     try {
       const [o, s, f, d, dd, r] = await Promise.all([
-        apiGet<Overview>("/api/v2/analytics/overview", { cache: "no-store" }),
-        apiGet<ByStrategy[]>("/api/v2/analytics/by-strategy", { cache: "no-store" }),
-        apiGet<Failure[]>("/api/v2/analytics/failures", { cache: "no-store" }),
+        apiGet<Overview>("/api/v2/analytics/overview", { cache: "no-store", signal }),
+        apiGet<ByStrategy[]>("/api/v2/analytics/by-strategy", { cache: "no-store", signal }),
+        apiGet<Failure[]>("/api/v2/analytics/failures", { cache: "no-store", signal }),
         apiGet<DailyStat[]>(`/api/v2/analytics/daily?limit=365${rangeQuery ? `&${rangeQuery}` : ""}`, {
           cache: "no-store",
+          signal,
         }),
-        apiGet<Drawdown>(`/api/v2/analytics/drawdown${rangeQuery ? `?${rangeQuery}` : ""}`, { cache: "no-store" }),
-        apiGet<Ratio>(`/api/v2/analytics/ratios${rangeQuery ? `?${rangeQuery}` : ""}`, { cache: "no-store" }),
+        apiGet<Drawdown>(`/api/v2/analytics/drawdown${rangeQuery ? `?${rangeQuery}` : ""}`, { cache: "no-store", signal }),
+        apiGet<Ratio>(`/api/v2/analytics/ratios${rangeQuery ? `?${rangeQuery}` : ""}`, { cache: "no-store", signal }),
       ]);
       setOverview(o.data);
       setByStrategy(s.data ?? []);
@@ -143,21 +152,24 @@ export default function AnalyticsPage() {
       if (defaultStrategy) {
         const a = await apiGet<Attribution>(
           `/api/v2/analytics/strategy/${encodeURIComponent(defaultStrategy)}/attribution${rangeQuery ? `?${rangeQuery}` : ""}`,
-          { cache: "no-store" }
+          { cache: "no-store", signal }
         );
         setAttribution(a.data);
       } else {
         setAttribution(null);
       }
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [rangeQuery, attrStrategy]);
 
   useEffect(() => {
     void refresh();
+    return () => abortRef.current?.abort();
   }, [refresh]);
 
   async function refreshAttribution(strategyName: string) {
@@ -166,12 +178,14 @@ export default function AnalyticsPage() {
       return;
     }
     try {
+      const signal = abortRef.current?.signal;
       const a = await apiGet<Attribution>(
         `/api/v2/analytics/strategy/${encodeURIComponent(strategyName)}/attribution${rangeQuery ? `?${rangeQuery}` : ""}`,
-        { cache: "no-store" }
+        { cache: "no-store", signal }
       );
       setAttribution(a.data);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     }
   }
@@ -221,7 +235,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -270,40 +284,42 @@ export default function AnalyticsPage() {
 
       {tab === "overview" ? (
         <>
-          <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
             <div className="grid gap-3 px-6 py-5 text-sm sm:grid-cols-3">
-              <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
-                <div className="text-xs text-[var(--muted)]">total_plans</div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
+                <div className="text-xs text-[var(--muted)]">Total Plans</div>
                 <div className="mt-1 text-xl font-semibold">{overview?.TotalPlans ?? 0}</div>
               </div>
-              <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
-                <div className="text-xs text-[var(--muted)]">total_pnl_usd</div>
-                <div className="mt-1 text-xl font-semibold">${fmt(overview?.TotalPnLUSD ?? 0)}</div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
+                <div className="text-xs text-[var(--muted)]">Total P&amp;L</div>
+                <div className={(overview?.TotalPnLUSD ?? 0) >= 0 ? "mt-1 text-xl font-semibold text-profit" : "mt-1 text-xl font-semibold text-loss"}>
+                  ${fmt(overview?.TotalPnLUSD ?? 0)}
+                </div>
               </div>
-              <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
-                <div className="text-xs text-[var(--muted)]">avg_roi</div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
+                <div className="text-xs text-[var(--muted)]">Avg ROI</div>
                 <div className="mt-1 text-xl font-semibold">{fmt((overview?.AvgROI ?? 0) * 100)}%</div>
               </div>
-              <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
-                <div className="text-xs text-[var(--muted)]">win</div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
+                <div className="text-xs text-[var(--muted)]">Wins</div>
                 <div className="mt-1 text-xl font-semibold">{overview?.WinCount ?? 0}</div>
               </div>
-              <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
-                <div className="text-xs text-[var(--muted)]">loss</div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
+                <div className="text-xs text-[var(--muted)]">Losses</div>
                 <div className="mt-1 text-xl font-semibold">{overview?.LossCount ?? 0}</div>
               </div>
-              <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
-                <div className="text-xs text-[var(--muted)]">pending</div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-4">
+                <div className="text-xs text-[var(--muted)]">Pending</div>
                 <div className="mt-1 text-xl font-semibold">{overview?.PendingCount ?? 0}</div>
               </div>
             </div>
           </section>
 
-          <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
             <div className="border-b border-[color:var(--border)] px-6 py-4">
               <p className="text-sm font-semibold">By Strategy</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
                   <tr>
@@ -325,13 +341,22 @@ export default function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
+            <div className="space-y-3 p-4 md:hidden">
+              {byStrategy.map((r) => (
+                <div key={`m-${r.StrategyName}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+                  <div className="font-medium">{r.StrategyName}</div>
+                  <div className="mt-1 text-xs text-[var(--muted)]">plans {r.Plans} · avg ROI {fmt(r.AvgROI * 100)}%</div>
+                  <div className={r.TotalPnLUSD >= 0 ? "mt-1 text-sm text-profit" : "mt-1 text-sm text-loss"}>${fmt(r.TotalPnLUSD)}</div>
+                </div>
+              ))}
+            </div>
           </section>
 
-          <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
             <div className="border-b border-[color:var(--border)] px-6 py-4">
               <p className="text-sm font-semibold">Failures</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
                   <tr>
@@ -349,13 +374,21 @@ export default function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
+            <div className="space-y-3 p-4 md:hidden">
+              {failures.map((r) => (
+                <div key={`m-${r.FailureReason}-${r.Count}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+                  <div className="text-xs text-[var(--muted)]">{r.FailureReason || "(empty)"}</div>
+                  <div className="mt-1 font-semibold">{r.Count}</div>
+                </div>
+              ))}
+            </div>
           </section>
         </>
       ) : null}
 
       {tab === "performance" ? (
         <>
-          <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] p-5">
+          <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-5">
             <p className="mb-3 text-sm font-semibold">Cumulative PnL Curve</p>
             <div className="grid grid-cols-12 items-end gap-1">
               {cumulativeSeries.map((pt) => {
@@ -373,7 +406,7 @@ export default function AnalyticsPage() {
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] p-5">
+          <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-5">
             <p className="mb-3 text-sm font-semibold">Drawdown Curve</p>
             <div className="grid grid-cols-12 items-end gap-1">
               {drawdownCurve.map((pt) => {
@@ -392,19 +425,19 @@ export default function AnalyticsPage() {
           </section>
 
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">max_drawdown_usd: ${fmt(drawdown?.MaxDrawdownUSD ?? 0)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">max_drawdown_pct: {fmt((drawdown?.MaxDrawdownPct ?? 0) * 100)}%</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">drawdown_days: {drawdown?.DrawdownDurationDays ?? 0}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">current_drawdown: ${fmt(drawdown?.CurrentDrawdownUSD ?? 0)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">peak_pnl: ${fmt(drawdown?.PeakPnL ?? 0)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">trough_pnl: ${fmt(drawdown?.TroughPnL ?? 0)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">max_drawdown_usd: ${fmt(drawdown?.MaxDrawdownUSD ?? 0)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">max_drawdown_pct: {fmt((drawdown?.MaxDrawdownPct ?? 0) * 100)}%</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">drawdown_days: {drawdown?.DrawdownDurationDays ?? 0}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">current_drawdown: ${fmt(drawdown?.CurrentDrawdownUSD ?? 0)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">peak_pnl: ${fmt(drawdown?.PeakPnL ?? 0)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">trough_pnl: ${fmt(drawdown?.TroughPnL ?? 0)}</div>
           </section>
         </>
       ) : null}
 
       {tab === "attribution" ? (
         <>
-          <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] p-5">
+          <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-5">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <select
                 className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] px-2 py-1 text-xs"
@@ -449,14 +482,14 @@ export default function AnalyticsPage() {
           </section>
 
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Sharpe: {fmt(ratios?.SharpeRatio ?? 0, 3)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Sortino: {fmt(ratios?.SortinoRatio ?? 0, 3)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Win Rate: {fmt((ratios?.WinRate ?? 0) * 100)}%</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Profit Factor: {fmt(ratios?.ProfitFactor ?? 0, 3)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Avg Win: ${fmt(ratios?.AvgWin ?? 0)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Avg Loss: ${fmt(ratios?.AvgLoss ?? 0)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Expectancy: ${fmt(ratios?.Expectancy ?? 0)}</div>
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Net PnL: ${fmt(attribution?.NetPnL ?? 0)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Sharpe: {fmt(ratios?.SharpeRatio ?? 0, 3)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Sortino: {fmt(ratios?.SortinoRatio ?? 0, 3)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Win Rate: {fmt((ratios?.WinRate ?? 0) * 100)}%</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Profit Factor: {fmt(ratios?.ProfitFactor ?? 0, 3)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Avg Win: ${fmt(ratios?.AvgWin ?? 0)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Avg Loss: ${fmt(ratios?.AvgLoss ?? 0)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Expectancy: ${fmt(ratios?.Expectancy ?? 0)}</div>
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">Net PnL: ${fmt(attribution?.NetPnL ?? 0)}</div>
           </section>
         </>
       ) : null}

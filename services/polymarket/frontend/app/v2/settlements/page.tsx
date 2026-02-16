@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiGet, apiPost } from "@/lib/api";
+import { isSafePathSegment } from "@/lib/path";
 
 type LabelRateRow = {
   Label: string;
@@ -20,28 +21,39 @@ export default function SettlementsPage() {
   const [outcome, setOutcome] = useState("NO");
   const [settledAt, setSettledAt] = useState("");
   const [finalYesPrice, setFinalYesPrice] = useState("");
+  const loadingRef = useRef(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const body = await apiGet<LabelRateRow[]>("/api/v2/settlements/label-rates", { cache: "no-store" });
+      const body = await apiGet<LabelRateRow[]>("/api/v2/settlements/label-rates", { cache: "no-store", signal });
       setRates(body.data ?? []);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   async function upsert() {
     try {
+      if (!isSafePathSegment(marketId)) {
+        setError("Invalid market ID");
+        return;
+      }
       await apiPost("/api/v2/settlements", {
-        market_id: marketId,
+        market_id: marketId.trim(),
         outcome,
         settled_at: settledAt || undefined,
         final_yes_price: finalYesPrice || undefined,
@@ -56,7 +68,7 @@ export default function SettlementsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -77,7 +89,7 @@ export default function SettlementsPage() {
         {error ? <div className="mt-4 text-sm text-red-500">{error}</div> : null}
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">Upsert Settlement</p>
           <p className="text-xs text-[var(--muted)]">按 market_id 唯一键 upsert。</p>
@@ -133,12 +145,12 @@ export default function SettlementsPage() {
         </div>
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">Label NO Rates</p>
           <p className="text-xs text-[var(--muted)]">来自 `market_settlement_history` + `market_labels` join。</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
@@ -160,8 +172,16 @@ export default function SettlementsPage() {
             </tbody>
           </table>
         </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {rates.map((r) => (
+            <div key={`m-${r.Label}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+              <div className="font-medium">{r.Label}</div>
+              <div className="mt-1 text-xs text-[var(--muted)]">total {r.Total} · no {r.NoCount}</div>
+              <div className="mt-1 text-xs">NO rate {(r.NoRate * 100).toFixed(2)}%</div>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );
 }
-
