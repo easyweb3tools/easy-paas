@@ -556,6 +556,18 @@ func apiPolymarketCmd(ctx Context, args []string) error {
 			"description": strings.TrimSpace(*desc),
 		})
 
+	case "settings-reencrypt-sensitive":
+		fs := flag.NewFlagSet("easyweb3 api polymarket settings-reencrypt-sensitive", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		prefix := fs.String("prefix", "", "optional key prefix")
+		limit := fs.Int("limit", 5000, "scan limit")
+		_ = fs.Parse(args[1:])
+		q := fmt.Sprintf("?limit=%d", *limit)
+		if strings.TrimSpace(*prefix) != "" {
+			q += "&prefix=" + urlQueryEscape(strings.TrimSpace(*prefix))
+		}
+		return polymarketDo(ctx, http.MethodPost, "/api/v2/system-settings/re-encrypt-sensitive"+q, map[string]any{})
+
 	default:
 		return fmt.Errorf("unknown polymarket operation: %s", args[0])
 	}
