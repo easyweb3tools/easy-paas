@@ -42,7 +42,7 @@ COPY --from=openclaw_build /usr/local/lib/node_modules /usr/local/lib/node_modul
 
 COPY --from=easyweb3_cli_build /out/easyweb3 /usr/local/bin/easyweb3
 
-COPY openclaw-entrypoint.sh /entrypoint.sh
+COPY openclaw/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # npm's generated bin shim uses relative imports from its own location, which breaks when

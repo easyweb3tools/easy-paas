@@ -31,7 +31,7 @@ jobs:
           - name: openclaw
             image: easyweb3-openclaw
             context: .
-            dockerfile: ./openclaw.Dockerfile
+            dockerfile: ./openclaw/Dockerfile
 
     steps:
       - name: Checkout

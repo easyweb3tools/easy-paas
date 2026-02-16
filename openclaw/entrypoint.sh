@@ -18,13 +18,18 @@ if [ ! -f "${CFG_PATH}" ]; then
   cat >"${CFG_PATH}" <<'JSON5'
 // ~/.openclaw/openclaw.json (JSON5)
 {
-  identity: { name: "easy-paas", theme: "easyweb3 agent runtime" },
   agents: {
     defaults: {
       workspace: "~/.openclaw/workspace",
       // We manage bootstrap files (AGENTS.md/TOOLS.md/BOOTSTRAP.md) below.
       skipBootstrap: true,
     },
+    list: [
+      {
+        id: "main",
+        identity: { name: "easy-paas", theme: "easyweb3 agent runtime" },
+      },
+    ],
   },
 }
 JSON5
