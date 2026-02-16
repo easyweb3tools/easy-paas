@@ -31,6 +31,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install OpenClaw CLI from npm.
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 
+# Prune heavy optional deps that are unnecessary for a gateway-only container:
+#   - @node-llama-cpp (CUDA/Vulkan/CPU local-inference binaries ~677MB)
+#   - node-llama-cpp (JS bindings ~34MB)
+#   - pdfjs-dist (~38MB, PDF parsing not needed for gateway)
+#   - @napi-rs/canvas* (~32MB, image rendering)
+#   - @img/sharp* (~17MB, image processing)
+#   - playwright-core (~10MB, browser automation bundled separately)
+#   - docs/ directory (~14MB, static documentation site)
+RUN rm -rf \
+    /usr/local/lib/node_modules/openclaw/node_modules/@node-llama-cpp \
+    /usr/local/lib/node_modules/openclaw/node_modules/node-llama-cpp \
+    /usr/local/lib/node_modules/openclaw/node_modules/pdfjs-dist \
+    /usr/local/lib/node_modules/openclaw/node_modules/@napi-rs \
+    /usr/local/lib/node_modules/openclaw/node_modules/@img \
+    /usr/local/lib/node_modules/openclaw/node_modules/playwright-core \
+    /usr/local/lib/node_modules/openclaw/docs
+
 FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
