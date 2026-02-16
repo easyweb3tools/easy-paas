@@ -139,6 +139,7 @@ func main() {
 		Risk:         riskMgr,
 		Logger:       logger,
 		PositionSync: positionSyncSvc,
+		Client:       clobClient,
 		Config: service.ExecutorConfig{
 			Mode:                 execMode,
 			MaxOrderSizeUSD:      decimal.Zero,
@@ -446,11 +447,12 @@ func main() {
 	}()
 
 	auto := &service.AutoExecutorService{
-		Repo:   store,
-		Risk:   riskMgr,
-		Logger: logger,
-		Config: cfg.AutoExecutor,
-		Flags:  settingsSvc,
+		Repo:     store,
+		Risk:     riskMgr,
+		Logger:   logger,
+		Config:   cfg.AutoExecutor,
+		Flags:    settingsSvc,
+		Executor: clobExecutor,
 	}
 	go func() {
 		if err := auto.Run(baseCtx); err != nil && !errors.Is(err, context.Canceled) {

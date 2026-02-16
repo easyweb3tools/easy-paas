@@ -30,13 +30,13 @@ Status legend:
 - `DONE` CLOB executor MVP (submit/poll/cancel, dry-run-first)
 - `DONE` APIs: `/api/v2/orders*`, `/api/v2/executions/:id/submit`
 - `DONE` Frontend page: `/v2/orders`
-- `TODO` Live exchange integration depth (real CLOB signed order placement + status sync)
+- `DONE` Live exchange integration depth (real CLOB signed order placement + status sync)
 
 ### A3. Automated Trading Loop (Phase 3)
 - `DONE` ExecutionRule model + CRUD API + frontend automation page
 - `DONE` AutoExecutor MVP (rule-based auto execution in dry-run loop)
 - `DONE` PositionManager auto close loop (stop-loss / take-profit / hold time / expiry) [MVP]
-- `TODO` Full live order submission integration in automation path
+- `DONE` Full live order submission integration in automation path
 
 ## B. Review System Pending
 
@@ -44,7 +44,7 @@ Status legend:
 - `DONE` TradeJournal model + migration
 - `DONE` JournalService entry/exit capture integration
 - `DONE` Journal APIs + frontend journal page
-- `TODO` Deep decision-chain completeness fields (entry/exit market execution details parity with spec)
+- `DONE` Deep decision-chain completeness fields (entry/exit market execution details parity with spec)
 
 ### B2. Strategy Deep Analytics (Phase 2)
 - `DONE` StrategyDailyStats model + migration
@@ -52,7 +52,7 @@ Status legend:
 - `DONE` Attribution service (query-time)
 - `DONE` Drawdown / Correlation / Ratios queries (query-time)
 - `DONE` Analytics API extensions (`/api/v2/analytics/daily|strategy/:name/daily|strategy/:name/attribution|drawdown|correlation|ratios`)
-- `TODO` Frontend analytics enhancement tabs
+- `DONE` Frontend analytics enhancement tabs
 
 ### B3. Market Review & Missed Alpha (Phase 3)
 - `DONE` MarketReview model + migration
@@ -67,8 +67,16 @@ Status legend:
 ### C1. Trading Live CLOB Depth
 - `DONE` Runtime executor mode control via DB setting (`trading.executor_mode`: `"dry-run"`/`"live"`)
 - `DONE` Live mode now explicitly reports non-integrated path (no silent noop)
-- `TODO` Real live CLOB signed order placement and robust order-state sync
-- `TODO` Automation path to use live submit flow end-to-end
+- `DONE` Live broker adapter path for submit/get/cancel + order polling status sync (`trading.live.*` settings)
+- `DONE` Automation path now reuses `CLOBExecutor.SubmitPlan` end-to-end
+- `DONE` Live auth hardening: API key / bearer / HMAC modes (`trading.live.auth_mode` + secret/signature headers)
+- `DONE` System settings API masks sensitive values (`*secret*/*token*/*api_key*/*password*`)
+- `DONE` Sensitive settings optional encryption at rest (`PM_SETTINGS_ENCRYPTION_KEY`, AES-GCM)
+- `DONE` Direct CLOB path supports pre-signed native order payload per leg (`signed_order`, `auth_mode=polymarket_l2`, configurable POLY_* headers)
+- `DONE` Optional external signer mode for native signed payload generation (`auth_mode=polymarket_l2_signer`, `trading.live.signer_url`)
+- `DONE` Sensitive config key rotation workflow (`PM_SETTINGS_ENCRYPTION_PREV_KEY` + `POST /api/v2/system-settings/re-encrypt-sensitive`)
+- `DONE` In-process native secp256k1 signing mode (`auth_mode=polymarket_l2_local`, uses `trading.live.private_key`)
+- `DONE` Build full Polymarket EIP-712-style unsigned order payload in backend directly from plan legs (remove hard dependency on precomputed `unsigned_order` + `signing_hash`)
 
 ### C2. Journal Deep Decision Chain
 - `DONE` Enrich journal capture with execution/fill summary snapshots in entry/exit

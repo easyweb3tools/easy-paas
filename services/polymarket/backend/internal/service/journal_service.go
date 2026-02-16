@@ -70,6 +70,7 @@ func (s *JournalService) CaptureEntry(ctx context.Context, planID uint64) error 
 		marketSnapshot["last_trade_prices"] = trades
 	}
 	fills, _ := s.Repo.ListFillsByPlanID(ctx, plan.ID)
+	orders := listPlanOrders(ctx, s.Repo, plan.ID)
 	marketSnapshot["execution"] = map[string]any{
 		"plan_id":      plan.ID,
 		"status":       plan.Status,
@@ -78,6 +79,8 @@ func (s *JournalService) CaptureEntry(ctx context.Context, planID uint64) error 
 		"created_at":   plan.CreatedAt,
 		"planned_legs": json.RawMessage(plan.Legs),
 		"params":       json.RawMessage(plan.Params),
+		"orders":       orders,
+		"order_stats":  summarizeOrders(orders),
 		"fills":        fills,
 		"fill_stats":   summarizeFills(fills),
 	}
@@ -127,6 +130,7 @@ func (s *JournalService) CaptureExit(ctx context.Context, planID uint64) error {
 		outcomeSnapshot["last_trade_prices"] = trades
 	}
 	fills, _ := s.Repo.ListFillsByPlanID(ctx, plan.ID)
+	orders := listPlanOrders(ctx, s.Repo, plan.ID)
 	outcomeSnapshot["execution"] = map[string]any{
 		"plan_id":      plan.ID,
 		"status":       plan.Status,
@@ -136,6 +140,8 @@ func (s *JournalService) CaptureExit(ctx context.Context, planID uint64) error {
 		"executed_at":  plan.ExecutedAt,
 		"planned_legs": json.RawMessage(plan.Legs),
 		"params":       json.RawMessage(plan.Params),
+		"orders":       orders,
+		"order_stats":  summarizeOrders(orders),
 		"fills":        fills,
 		"fill_stats":   summarizeFills(fills),
 	}
@@ -215,4 +221,47 @@ func summarizeFills(fills []models.Fill) map[string]any {
 		"total_fee":      totalFee,
 		"total_slippage": totalSlippage,
 	}
+}
+
+func listPlanOrders(ctx context.Context, repo repository.Repository, planID uint64) []models.Order {
+	if repo == nil || planID == 0 {
+		return nil
+	}
+	ref := planID
+	orders, err := repo.ListOrders(ctx, repository.ListOrdersParams{
+		Limit:   1000,
+		Offset:  0,
+		PlanID:  &ref,
+		OrderBy: "created_at",
+		Asc:     boolPtrJournal(true),
+	})
+	if err != nil {
+		return nil
+	}
+	return orders
+}
+
+func summarizeOrders(orders []models.Order) map[string]any {
+	out := map[string]any{
+		"count": len(orders),
+	}
+	if len(orders) == 0 {
+		return out
+	}
+	totalSizeUSD := 0.0
+	totalFilledUSD := 0.0
+	statusCounts := map[string]int{}
+	for _, o := range orders {
+		totalSizeUSD += o.SizeUSD.InexactFloat64()
+		totalFilledUSD += o.FilledUSD.InexactFloat64()
+		key := strings.ToLower(strings.TrimSpace(o.Status))
+		if key == "" {
+			key = "unknown"
+		}
+		statusCounts[key]++
+	}
+	out["total_size_usd"] = totalSizeUSD
+	out["total_filled_usd"] = totalFilledUSD
+	out["status_counts"] = statusCounts
+	return out
 }

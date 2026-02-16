@@ -22,6 +22,8 @@ type AutoExecutorService struct {
 	Logger *zap.Logger
 	Config config.AutoExecutorConfig
 	Flags  *SystemSettingsService
+	// Executor unifies dry-run/live order submission path.
+	Executor *CLOBExecutor
 }
 
 func (s *AutoExecutorService) Run(ctx context.Context) error {
@@ -173,16 +175,31 @@ func (s *AutoExecutorService) processOpportunity(ctx context.Context, opp models
 		}
 	}
 
-	_ = s.Repo.UpdateExecutionPlanStatus(ctx, plan.ID, "executing")
-	if s.Config.DryRun {
-		if err := s.insertDryRunFills(ctx, *plan); err != nil {
+	if s.Executor != nil {
+		out, err := s.Executor.SubmitPlan(ctx, plan.ID)
+		if err != nil {
+			_ = s.Repo.UpdateExecutionPlanStatus(ctx, plan.ID, "failed")
+			_ = s.Repo.UpdateOpportunityStatus(ctx, opp.ID, "failed")
 			return err
 		}
-		now := time.Now().UTC()
-		_ = s.Repo.UpdateExecutionPlanExecutedAt(ctx, plan.ID, "executed", &now)
-		_ = s.Repo.UpdateOpportunityStatus(ctx, opp.ID, "executed")
-	} else if s.Logger != nil {
-		s.Logger.Info("auto executor live mode placeholder: plan moved to executing", zap.Uint64("plan_id", plan.ID))
+		if out == nil {
+			_ = s.Repo.UpdateExecutionPlanStatus(ctx, plan.ID, "failed")
+			_ = s.Repo.UpdateOpportunityStatus(ctx, opp.ID, "failed")
+			return nil
+		}
+	} else {
+		// Backward-compatible fallback (kept for tests/incremental rollout).
+		_ = s.Repo.UpdateExecutionPlanStatus(ctx, plan.ID, "executing")
+		if s.Config.DryRun {
+			if err := s.insertDryRunFills(ctx, *plan); err != nil {
+				return err
+			}
+			now := time.Now().UTC()
+			_ = s.Repo.UpdateExecutionPlanExecutedAt(ctx, plan.ID, "executed", &now)
+			_ = s.Repo.UpdateOpportunityStatus(ctx, opp.ID, "executed")
+		} else if s.Logger != nil {
+			s.Logger.Info("auto executor live mode placeholder: plan moved to executing", zap.Uint64("plan_id", plan.ID))
+		}
 	}
 
 	if s.Logger != nil {

@@ -22,6 +22,7 @@ type V2SystemSettingsHandler struct {
 func (h *V2SystemSettingsHandler) Register(r *gin.Engine) {
 	g := r.Group("/api/v2/system-settings")
 	g.GET("", h.list)
+	g.POST("/re-encrypt-sensitive", h.reencryptSensitive)
 	g.GET("/switches", h.listSwitches)
 	g.GET("/switches/:name", h.getSwitch)
 	g.PUT("/switches/:name", h.putSwitch)
@@ -52,12 +53,16 @@ func (h *V2SystemSettingsHandler) list(c *gin.Context) {
 		Error(c, http.StatusBadGateway, err.Error(), nil)
 		return
 	}
+	safe := make([]models.SystemSetting, 0, len(items))
+	for _, it := range items {
+		safe = append(safe, sanitizeSystemSetting(it))
+	}
 	total, err := h.Repo.CountSystemSettings(c.Request.Context(), params)
 	if err != nil {
 		Error(c, http.StatusBadGateway, err.Error(), nil)
 		return
 	}
-	Ok(c, items, paginationMeta(limit, offset, total))
+	Ok(c, safe, paginationMeta(limit, offset, total))
 }
 
 func (h *V2SystemSettingsHandler) get(c *gin.Context) {
@@ -79,12 +84,18 @@ func (h *V2SystemSettingsHandler) get(c *gin.Context) {
 		Error(c, http.StatusNotFound, "setting not found", nil)
 		return
 	}
-	Ok(c, item, nil)
+	safe := sanitizeSystemSetting(*item)
+	Ok(c, safe, nil)
 }
 
 type putSystemSettingRequest struct {
 	Value       any    `json:"value"`
 	Description string `json:"description"`
+}
+
+type reencryptSensitiveResult struct {
+	Scanned int `json:"scanned"`
+	Changed int `json:"changed"`
 }
 
 func (h *V2SystemSettingsHandler) put(c *gin.Context) {
@@ -107,6 +118,7 @@ func (h *V2SystemSettingsHandler) put(c *gin.Context) {
 		Error(c, http.StatusBadRequest, "invalid value", nil)
 		return
 	}
+	raw = service.ProtectSettingValue(key, raw)
 	item := &models.SystemSetting{
 		Key:         key,
 		Value:       datatypes.JSON(raw),
@@ -118,7 +130,58 @@ func (h *V2SystemSettingsHandler) put(c *gin.Context) {
 		return
 	}
 	next, _ := h.Repo.GetSystemSettingByKey(c.Request.Context(), key)
-	Ok(c, next, nil)
+	if next == nil {
+		Ok(c, next, nil)
+		return
+	}
+	safe := sanitizeSystemSetting(*next)
+	Ok(c, safe, nil)
+}
+
+func (h *V2SystemSettingsHandler) reencryptSensitive(c *gin.Context) {
+	if h.Repo == nil {
+		Error(c, http.StatusInternalServerError, "repo unavailable", nil)
+		return
+	}
+	limit := intQuery(c, "limit", 5000)
+	if limit <= 0 || limit > 20000 {
+		limit = 5000
+	}
+	var prefix *string
+	if v := strings.TrimSpace(c.Query("prefix")); v != "" {
+		prefix = &v
+	}
+	items, err := h.Repo.ListSystemSettings(c.Request.Context(), repository.ListSystemSettingsParams{
+		Limit:   limit,
+		Offset:  0,
+		Prefix:  prefix,
+		OrderBy: "key",
+		Asc:     boolPtr(true),
+	})
+	if err != nil {
+		Error(c, http.StatusBadGateway, err.Error(), nil)
+		return
+	}
+	changed := 0
+	now := time.Now().UTC()
+	for _, it := range items {
+		next, ok := service.ReencryptSensitiveValue(it.Key, it.Value)
+		if !ok {
+			continue
+		}
+		row := &models.SystemSetting{
+			Key:         it.Key,
+			Value:       datatypes.JSON(next),
+			Description: it.Description,
+			UpdatedAt:   now,
+		}
+		if err := h.Repo.UpsertSystemSetting(c.Request.Context(), row); err != nil {
+			Error(c, http.StatusBadGateway, err.Error(), nil)
+			return
+		}
+		changed++
+	}
+	Ok(c, reencryptSensitiveResult{Scanned: len(items), Changed: changed}, nil)
 }
 
 func (h *V2SystemSettingsHandler) listSwitches(c *gin.Context) {
@@ -202,4 +265,33 @@ func (h *V2SystemSettingsHandler) putSwitch(c *gin.Context) {
 		"key":     key,
 		"enabled": req.Enabled,
 	}, nil)
+}
+
+func sanitizeSystemSetting(item models.SystemSetting) models.SystemSetting {
+	if !isSensitiveSystemSettingKey(item.Key) {
+		return item
+	}
+	masked, _ := json.Marshal("***")
+	item.Value = datatypes.JSON(masked)
+	return item
+}
+
+func isSensitiveSystemSettingKey(key string) bool {
+	k := strings.ToLower(strings.TrimSpace(key))
+	if k == "" {
+		return false
+	}
+	markers := []string{
+		"secret",
+		"token",
+		"password",
+		"api_key",
+		"private_key",
+	}
+	for _, m := range markers {
+		if strings.Contains(k, m) {
+			return true
+		}
+	}
+	return false
 }
