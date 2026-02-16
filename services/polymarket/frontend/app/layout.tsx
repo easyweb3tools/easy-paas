@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 import "./globals.css";
-import NavLink from "@/components/NavLink";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
+import AppNavigation from "@/components/AppNavigation";
 
 export const metadata: Metadata = {
   title: "Polymarket Dashboard",
@@ -17,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <header className="glass-panel sticky top-0 z-40 border-b border-[color:var(--border)] bg-[var(--glass)] backdrop-blur-md shadow-[var(--shadow)]">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
               <a href="/" className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-2xl bg-black/90 text-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:bg-white/90 dark:text-black">
+                <div className="h-9 w-9 rounded-xl bg-black/90 text-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:bg-white/90 dark:text-black">
                   <div className="flex h-full w-full items-center justify-center text-sm font-semibold">PM</div>
                 </div>
                 <div>
@@ -25,22 +26,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <p className="text-xs text-[var(--muted)]">Prediction Studio</p>
                 </div>
               </a>
-              <div className="hidden items-center gap-3 text-sm font-medium text-[var(--muted)] sm:flex">
-                <NavLink href="/" label="Catalog" />
-                <NavLink href="/v2/opportunities" label="Opportunities" />
-                <NavLink href="/v2/strategies" label="Strategies" />
-                <NavLink href="/v2/executions" label="Executions" />
-                <NavLink href="/v2/analytics" label="Analytics" />
-                <NavLink href="/v2/signals" label="Signals" />
-                <NavLink href="/v2/labels" label="Labels" />
-                <NavLink href="/v2/settlements" label="Settlements" />
-                <NavLink href="/v2/settings" label="Settings" />
-              </div>
+              <AppNavigation />
             </div>
           </header>
 
-          <main className="mx-auto flex min-h-[calc(100vh-64px)] max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
-            {children}
+          <main className="mx-auto flex min-h-[calc(100vh-64px)] max-w-6xl flex-col gap-6 px-4 py-6 pb-20 sm:px-6 md:pb-6">
+            <AppErrorBoundary>{children}</AppErrorBoundary>
           </main>
         </div>
       </body>

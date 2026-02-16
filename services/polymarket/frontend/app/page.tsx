@@ -66,6 +66,20 @@ type MarketRow = {
   LastSeenAt?: string | null;
 };
 
+type OpportunityLite = {
+  ID: number;
+  Strategy?: { Name?: string };
+  EdgeUSD?: string;
+  Status?: string;
+};
+
+type ExecutionLite = {
+  ID: number;
+  StrategyName?: string;
+  Status?: string;
+  PlannedSizeUSD?: string;
+};
+
 function statusBadge(active: boolean, closed: boolean) {
   if (closed) return { label: "已关闭", color: "bg-slate-300 text-slate-700" };
   if (active) return { label: "活跃", color: "bg-emerald-500 text-white" };
@@ -77,6 +91,8 @@ export default function HomePage() {
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [eventMeta, setEventMeta] = useState<ApiResponse<EventRow[]>["meta"]>();
   const [marketMeta, setMarketMeta] = useState<ApiResponse<MarketRow[]>["meta"]>();
+  const [opportunities, setOpportunities] = useState<OpportunityLite[]>([]);
+  const [executions, setExecutions] = useState<ExecutionLite[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -98,6 +114,22 @@ export default function HomePage() {
       setMarkets(marketBody.data || []);
       setEventMeta(eventBody.meta);
       setMarketMeta(marketBody.meta);
+      const [oppRes, exeRes] = await Promise.allSettled([
+        fetch(apiUrl(`/api/v2/opportunities?status=active&limit=5&order=desc`), { signal }),
+        fetch(apiUrl(`/api/v2/executions?status=executing&limit=5&order=desc`), { signal }),
+      ]);
+      if (oppRes.status === "fulfilled" && oppRes.value.ok) {
+        const body = (await oppRes.value.json()) as ApiResponse<OpportunityLite[]>;
+        setOpportunities(body.data ?? []);
+      } else {
+        setOpportunities([]);
+      }
+      if (exeRes.status === "fulfilled" && exeRes.value.ok) {
+        const body = (await exeRes.value.json()) as ApiResponse<ExecutionLite[]>;
+        setExecutions(body.data ?? []);
+      } else {
+        setExecutions([]);
+      }
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "unknown error");
@@ -114,13 +146,13 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Polymarket Data Fetch</p>
-            <h1 className="text-2xl font-semibold tracking-tight">Polymarket 数据抓取</h1>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Dashboard</p>
+            <h1 className="text-2xl font-semibold tracking-tight">Polymarket 控制台</h1>
             <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-              实时展示抓取到的事件与市场概览，优先关注数据同步与抓取稳定性。
+              优先关注当前机会、执行状态和抓取健康度，完整明细在各功能页查看。
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -139,7 +171,57 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="glass-panel relative overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <p className="text-xs text-[var(--muted)]">Active Opportunities</p>
+          <p className="mt-1 text-2xl font-semibold">{loading ? "--" : opportunities.length}</p>
+        </div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <p className="text-xs text-[var(--muted)]">Pending Executions</p>
+          <p className="mt-1 text-2xl font-semibold">{loading ? "--" : executions.length}</p>
+        </div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <p className="text-xs text-[var(--muted)]">Total Events</p>
+          <p className="mt-1 text-2xl font-semibold">{loading ? "--" : formatNumber(eventMeta?.total ?? events.length, 0)}</p>
+        </div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <p className="text-xs text-[var(--muted)]">Total Markets</p>
+          <p className="mt-1 text-2xl font-semibold">{loading ? "--" : formatNumber(marketMeta?.total ?? markets.length, 0)}</p>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <p className="text-sm font-semibold">Latest Opportunities</p>
+          {opportunities.length === 0 ? (
+            <p className="mt-3 text-sm text-[var(--muted)]">No active opportunities. Strategy engine will scan automatically.</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {opportunities.map((it) => (
+                <li key={it.ID} className="rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm">
+                  <span className="font-mono text-xs">#{it.ID}</span> {it.Strategy?.Name ?? "strategy"} · ${formatNumber(it.EdgeUSD ?? 0, 2)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-4">
+          <p className="text-sm font-semibold">Pending Executions</p>
+          {executions.length === 0 ? (
+            <p className="mt-3 text-sm text-[var(--muted)]">No pending executions.</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {executions.map((it) => (
+                <li key={it.ID} className="rounded-lg border border-[color:var(--border)] px-3 py-2 text-sm">
+                  <span className="font-mono text-xs">#{it.ID}</span> {it.StrategyName ?? "strategy"} · ${formatNumber(it.PlannedSizeUSD ?? 0, 2)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section className="glass-panel relative overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="relative z-10 border-b border-[color:var(--border)] px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -157,7 +239,7 @@ export default function HomePage() {
         ) : loading ? (
           <div className="px-6 py-10 text-sm text-[var(--muted)]">正在加载事件数据...</div>
         ) : events.length === 0 ? (
-          <div className="px-6 py-10 text-sm text-[var(--muted)]">暂无事件数据，请先运行同步。</div>
+          <div className="px-6 py-10 text-sm text-[var(--muted)]">暂无事件数据。同步任务会自动拉取，请稍后刷新。</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left text-sm">
@@ -198,7 +280,7 @@ export default function HomePage() {
         )}
       </section>
 
-      <section className="glass-panel relative overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel relative overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="relative z-10 border-b border-[color:var(--border)] px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -216,7 +298,7 @@ export default function HomePage() {
         ) : loading ? (
           <div className="px-6 py-10 text-sm text-[var(--muted)]">正在加载市场数据...</div>
         ) : markets.length === 0 ? (
-          <div className="px-6 py-10 text-sm text-[var(--muted)]">暂无市场数据，请先运行同步。</div>
+          <div className="px-6 py-10 text-sm text-[var(--muted)]">暂无市场数据。同步任务会自动拉取，请稍后刷新。</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left text-sm">

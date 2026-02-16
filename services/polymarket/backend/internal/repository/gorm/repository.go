@@ -3,6 +3,7 @@ package gormrepository
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -713,6 +714,25 @@ func (s *Store) UpdateExecutionPlanExecutedAt(ctx context.Context, id uint64, st
 		Updates(updates).Error
 }
 
+func (s *Store) CountExecutionPlansByStrategySince(ctx context.Context, strategyName string, since time.Time) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	strategyName = strings.TrimSpace(strategyName)
+	if strategyName == "" || since.IsZero() {
+		return 0, nil
+	}
+	query := s.db.WithContext(ctx).
+		Model(&models.ExecutionPlan{}).
+		Where("strategy_name = ?", strategyName).
+		Where("created_at >= ?", since.UTC())
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (s *Store) InsertFill(ctx context.Context, item *models.Fill) error {
 	if s == nil || s.db == nil || item == nil {
 		return nil
@@ -790,6 +810,1017 @@ func (s *Store) SumRealizedPnLSince(ctx context.Context, since time.Time) (decim
 	return decimal.NewFromFloat(out), nil
 }
 
+func (s *Store) UpsertExecutionRule(ctx context.Context, item *models.ExecutionRule) error {
+	if s == nil || s.db == nil || item == nil {
+		return nil
+	}
+	item.StrategyName = strings.TrimSpace(item.StrategyName)
+	if item.StrategyName == "" {
+		return nil
+	}
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "strategy_name"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"auto_execute",
+			"min_confidence",
+			"min_edge_pct",
+			"stop_loss_pct",
+			"take_profit_pct",
+			"max_hold_hours",
+			"max_daily_trades",
+			"updated_at",
+		}),
+	}).Create(item).Error
+}
+
+func (s *Store) GetExecutionRuleByStrategyName(ctx context.Context, strategyName string) (*models.ExecutionRule, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	strategyName = strings.TrimSpace(strategyName)
+	if strategyName == "" {
+		return nil, nil
+	}
+	var item models.ExecutionRule
+	err := s.db.WithContext(ctx).
+		Model(&models.ExecutionRule{}).
+		Where("strategy_name = ?", strategyName).
+		First(&item).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *Store) ListExecutionRules(ctx context.Context) ([]models.ExecutionRule, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var items []models.ExecutionRule
+	if err := s.db.WithContext(ctx).
+		Model(&models.ExecutionRule{}).
+		Order("strategy_name asc").
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) DeleteExecutionRuleByStrategyName(ctx context.Context, strategyName string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	strategyName = strings.TrimSpace(strategyName)
+	if strategyName == "" {
+		return nil
+	}
+	return s.db.WithContext(ctx).
+		Where("strategy_name = ?", strategyName).
+		Delete(&models.ExecutionRule{}).Error
+}
+
+func (s *Store) InsertTradeJournal(ctx context.Context, item *models.TradeJournal) error {
+	if s == nil || s.db == nil || item == nil {
+		return nil
+	}
+	return s.db.WithContext(ctx).Create(item).Error
+}
+
+func (s *Store) GetTradeJournalByPlanID(ctx context.Context, planID uint64) (*models.TradeJournal, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	if planID == 0 {
+		return nil, nil
+	}
+	var item models.TradeJournal
+	err := s.db.WithContext(ctx).
+		Model(&models.TradeJournal{}).
+		Where("execution_plan_id = ?", planID).
+		First(&item).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *Store) UpdateTradeJournalExit(ctx context.Context, planID uint64, updates map[string]any) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	if planID == 0 || len(updates) == 0 {
+		return nil
+	}
+	updates["updated_at"] = time.Now().UTC()
+	return s.db.WithContext(ctx).
+		Model(&models.TradeJournal{}).
+		Where("execution_plan_id = ?", planID).
+		Updates(updates).Error
+}
+
+func (s *Store) UpdateTradeJournalNotes(ctx context.Context, planID uint64, notes string, tags []byte, reviewedAt *time.Time) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	if planID == 0 {
+		return nil
+	}
+	updates := map[string]any{
+		"notes":       strings.TrimSpace(notes),
+		"tags":        tags,
+		"reviewed_at": reviewedAt,
+		"updated_at":  time.Now().UTC(),
+	}
+	return s.db.WithContext(ctx).
+		Model(&models.TradeJournal{}).
+		Where("execution_plan_id = ?", planID).
+		Updates(updates).Error
+}
+
+func (s *Store) ListTradeJournals(ctx context.Context, params repository.ListTradeJournalParams) ([]models.TradeJournal, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.TradeJournal{})
+	if params.StrategyName != nil && strings.TrimSpace(*params.StrategyName) != "" {
+		query = query.Where("strategy_name = ?", strings.TrimSpace(*params.StrategyName))
+	}
+	if params.Outcome != nil && strings.TrimSpace(*params.Outcome) != "" {
+		query = query.Where("outcome = ?", strings.TrimSpace(*params.Outcome))
+	}
+	if params.Since != nil && !params.Since.IsZero() {
+		query = query.Where("created_at >= ?", params.Since.UTC())
+	}
+	if params.Until != nil && !params.Until.IsZero() {
+		query = query.Where("created_at <= ?", params.Until.UTC())
+	}
+	for _, tag := range cleanStrings(params.Tags) {
+		like := "%" + tag + "%"
+		query = query.Where("CAST(tags AS TEXT) LIKE ?", like)
+	}
+	query = applyOrder(query, params.OrderBy, params.Asc, "created_at")
+	limit := normalizeLimit(params.Limit, 200)
+	offset := normalizeOffset(params.Offset)
+	var items []models.TradeJournal
+	if err := query.Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) CountTradeJournals(ctx context.Context, params repository.ListTradeJournalParams) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.TradeJournal{})
+	if params.StrategyName != nil && strings.TrimSpace(*params.StrategyName) != "" {
+		query = query.Where("strategy_name = ?", strings.TrimSpace(*params.StrategyName))
+	}
+	if params.Outcome != nil && strings.TrimSpace(*params.Outcome) != "" {
+		query = query.Where("outcome = ?", strings.TrimSpace(*params.Outcome))
+	}
+	if params.Since != nil && !params.Since.IsZero() {
+		query = query.Where("created_at >= ?", params.Since.UTC())
+	}
+	if params.Until != nil && !params.Until.IsZero() {
+		query = query.Where("created_at <= ?", params.Until.UTC())
+	}
+	for _, tag := range cleanStrings(params.Tags) {
+		like := "%" + tag + "%"
+		query = query.Where("CAST(tags AS TEXT) LIKE ?", like)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (s *Store) UpsertSystemSetting(ctx context.Context, item *models.SystemSetting) error {
+	if s == nil || s.db == nil || item == nil {
+		return nil
+	}
+	item.Key = strings.TrimSpace(item.Key)
+	if item.Key == "" {
+		return nil
+	}
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "key"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"value",
+			"description",
+			"updated_at",
+		}),
+	}).Create(item).Error
+}
+
+func (s *Store) GetSystemSettingByKey(ctx context.Context, key string) (*models.SystemSetting, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil, nil
+	}
+	var item models.SystemSetting
+	err := s.db.WithContext(ctx).Model(&models.SystemSetting{}).Where("key = ?", key).First(&item).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *Store) ListSystemSettings(ctx context.Context, params repository.ListSystemSettingsParams) ([]models.SystemSetting, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.SystemSetting{})
+	if params.Prefix != nil && strings.TrimSpace(*params.Prefix) != "" {
+		pattern := strings.TrimSpace(*params.Prefix) + "%"
+		query = query.Where("key LIKE ?", pattern)
+	}
+	query = applyOrder(query, params.OrderBy, params.Asc, "key")
+	limit := normalizeLimit(params.Limit, 500)
+	offset := normalizeOffset(params.Offset)
+	var items []models.SystemSetting
+	if err := query.Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) CountSystemSettings(ctx context.Context, params repository.ListSystemSettingsParams) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.SystemSetting{})
+	if params.Prefix != nil && strings.TrimSpace(*params.Prefix) != "" {
+		pattern := strings.TrimSpace(*params.Prefix) + "%"
+		query = query.Where("key LIKE ?", pattern)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (s *Store) UpsertPosition(ctx context.Context, item *models.Position) error {
+	if s == nil || s.db == nil || item == nil {
+		return nil
+	}
+	item.TokenID = strings.TrimSpace(item.TokenID)
+	if item.TokenID == "" {
+		return nil
+	}
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "token_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"market_id",
+			"event_id",
+			"direction",
+			"quantity",
+			"avg_entry_price",
+			"current_price",
+			"cost_basis",
+			"unrealized_pnl",
+			"realized_pnl",
+			"status",
+			"strategy_name",
+			"opened_at",
+			"closed_at",
+			"updated_at",
+		}),
+	}).Create(item).Error
+}
+
+func (s *Store) GetPositionByID(ctx context.Context, id uint64) (*models.Position, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	if id == 0 {
+		return nil, nil
+	}
+	var item models.Position
+	err := s.db.WithContext(ctx).Model(&models.Position{}).Where("id = ?", id).First(&item).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *Store) GetPositionByTokenID(ctx context.Context, tokenID string) (*models.Position, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	tokenID = strings.TrimSpace(tokenID)
+	if tokenID == "" {
+		return nil, nil
+	}
+	var item models.Position
+	err := s.db.WithContext(ctx).Model(&models.Position{}).Where("token_id = ?", tokenID).First(&item).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *Store) ListPositions(ctx context.Context, params repository.ListPositionsParams) ([]models.Position, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.Position{})
+	if params.Status != nil && strings.TrimSpace(*params.Status) != "" {
+		query = query.Where("status = ?", strings.TrimSpace(*params.Status))
+	}
+	if params.StrategyName != nil && strings.TrimSpace(*params.StrategyName) != "" {
+		query = query.Where("strategy_name = ?", strings.TrimSpace(*params.StrategyName))
+	}
+	if params.MarketID != nil && strings.TrimSpace(*params.MarketID) != "" {
+		query = query.Where("market_id = ?", strings.TrimSpace(*params.MarketID))
+	}
+	query = applyOrder(query, params.OrderBy, params.Asc, "opened_at")
+	limit := normalizeLimit(params.Limit, 200)
+	offset := normalizeOffset(params.Offset)
+	var items []models.Position
+	if err := query.Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) CountPositions(ctx context.Context, params repository.ListPositionsParams) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.Position{})
+	if params.Status != nil && strings.TrimSpace(*params.Status) != "" {
+		query = query.Where("status = ?", strings.TrimSpace(*params.Status))
+	}
+	if params.StrategyName != nil && strings.TrimSpace(*params.StrategyName) != "" {
+		query = query.Where("strategy_name = ?", strings.TrimSpace(*params.StrategyName))
+	}
+	if params.MarketID != nil && strings.TrimSpace(*params.MarketID) != "" {
+		query = query.Where("market_id = ?", strings.TrimSpace(*params.MarketID))
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (s *Store) ListOpenPositions(ctx context.Context) ([]models.Position, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var items []models.Position
+	if err := s.db.WithContext(ctx).Model(&models.Position{}).
+		Where("status = ?", "open").
+		Order("opened_at asc").
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) ClosePosition(ctx context.Context, id uint64, realizedPnL decimal.Decimal, closedAt time.Time) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	if id == 0 {
+		return nil
+	}
+	if closedAt.IsZero() {
+		closedAt = time.Now().UTC()
+	}
+	return s.db.WithContext(ctx).Model(&models.Position{}).Where("id = ?", id).Updates(map[string]any{
+		"status":         "closed",
+		"closed_at":      &closedAt,
+		"quantity":       decimal.Zero,
+		"cost_basis":     decimal.Zero,
+		"unrealized_pnl": decimal.Zero,
+		"realized_pnl":   realizedPnL,
+		"updated_at":     time.Now().UTC(),
+	}).Error
+}
+
+func (s *Store) PositionsSummary(ctx context.Context) (repository.PositionsSummary, error) {
+	if s == nil || s.db == nil {
+		return repository.PositionsSummary{}, nil
+	}
+	var row struct {
+		TotalOpen      int64
+		TotalCostBasis float64
+		TotalMarketVal float64
+		UnrealizedPnL  float64
+		RealizedPnL    float64
+	}
+	err := s.db.WithContext(ctx).
+		Table("positions").
+		Select(`
+			COALESCE(SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END),0) AS total_open,
+			COALESCE(SUM(CASE WHEN status = 'open' THEN cost_basis ELSE 0 END),0) AS total_cost_basis,
+			COALESCE(SUM(CASE WHEN status = 'open' THEN (current_price * quantity) ELSE 0 END),0) AS total_market_val,
+			COALESCE(SUM(CASE WHEN status = 'open' THEN unrealized_pnl ELSE 0 END),0) AS unrealized_pnl,
+			COALESCE(SUM(realized_pnl),0) AS realized_pnl
+		`).
+		Scan(&row).Error
+	if err != nil {
+		return repository.PositionsSummary{}, err
+	}
+	return repository.PositionsSummary{
+		TotalOpen:      row.TotalOpen,
+		TotalCostBasis: row.TotalCostBasis,
+		TotalMarketVal: row.TotalMarketVal,
+		UnrealizedPnL:  row.UnrealizedPnL,
+		RealizedPnL:    row.RealizedPnL,
+		NetLiquidation: row.TotalMarketVal + row.RealizedPnL,
+	}, nil
+}
+
+func (s *Store) InsertPortfolioSnapshot(ctx context.Context, item *models.PortfolioSnapshot) error {
+	if s == nil || s.db == nil || item == nil {
+		return nil
+	}
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "snapshot_at"}},
+		DoUpdates: clause.AssignmentColumns([]string{"total_positions", "total_cost_basis", "total_market_val", "unrealized_pnl", "realized_pnl", "net_liquidation"}),
+	}).Create(item).Error
+}
+
+func (s *Store) ListPortfolioSnapshots(ctx context.Context, params repository.ListPortfolioSnapshotsParams) ([]models.PortfolioSnapshot, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.PortfolioSnapshot{})
+	if params.Since != nil && !params.Since.IsZero() {
+		query = query.Where("snapshot_at >= ?", params.Since.UTC())
+	}
+	if params.Until != nil && !params.Until.IsZero() {
+		query = query.Where("snapshot_at <= ?", params.Until.UTC())
+	}
+	limit := normalizeLimit(params.Limit, 500)
+	offset := normalizeOffset(params.Offset)
+	var items []models.PortfolioSnapshot
+	if err := query.Order("snapshot_at desc").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) InsertOrder(ctx context.Context, item *models.Order) error {
+	if s == nil || s.db == nil || item == nil {
+		return nil
+	}
+	return s.db.WithContext(ctx).Create(item).Error
+}
+
+func (s *Store) GetOrderByID(ctx context.Context, id uint64) (*models.Order, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	if id == 0 {
+		return nil, nil
+	}
+	var item models.Order
+	err := s.db.WithContext(ctx).Model(&models.Order{}).Where("id = ?", id).First(&item).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *Store) ListOrders(ctx context.Context, params repository.ListOrdersParams) ([]models.Order, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.Order{})
+	if params.Status != nil && strings.TrimSpace(*params.Status) != "" {
+		query = query.Where("status = ?", strings.TrimSpace(*params.Status))
+	}
+	if params.PlanID != nil && *params.PlanID > 0 {
+		query = query.Where("plan_id = ?", *params.PlanID)
+	}
+	if params.TokenID != nil && strings.TrimSpace(*params.TokenID) != "" {
+		query = query.Where("token_id = ?", strings.TrimSpace(*params.TokenID))
+	}
+	query = applyOrder(query, params.OrderBy, params.Asc, "created_at")
+	limit := normalizeLimit(params.Limit, 200)
+	offset := normalizeOffset(params.Offset)
+	var items []models.Order
+	if err := query.Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) CountOrders(ctx context.Context, params repository.ListOrdersParams) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.Order{})
+	if params.Status != nil && strings.TrimSpace(*params.Status) != "" {
+		query = query.Where("status = ?", strings.TrimSpace(*params.Status))
+	}
+	if params.PlanID != nil && *params.PlanID > 0 {
+		query = query.Where("plan_id = ?", *params.PlanID)
+	}
+	if params.TokenID != nil && strings.TrimSpace(*params.TokenID) != "" {
+		query = query.Where("token_id = ?", strings.TrimSpace(*params.TokenID))
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (s *Store) UpdateOrderStatus(ctx context.Context, id uint64, status string, updates map[string]any) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	if id == 0 || strings.TrimSpace(status) == "" {
+		return nil
+	}
+	next := map[string]any{
+		"status":     strings.TrimSpace(status),
+		"updated_at": time.Now().UTC(),
+	}
+	for k, v := range updates {
+		next[k] = v
+	}
+	return s.db.WithContext(ctx).Model(&models.Order{}).Where("id = ?", id).Updates(next).Error
+}
+
+func (s *Store) UpsertStrategyDailyStats(ctx context.Context, item *models.StrategyDailyStats) error {
+	if s == nil || s.db == nil || item == nil {
+		return nil
+	}
+	item.StrategyName = strings.TrimSpace(item.StrategyName)
+	if item.StrategyName == "" || item.Date.IsZero() {
+		return nil
+	}
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "strategy_name"}, {Name: "date"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"trades_count",
+			"win_count",
+			"loss_count",
+			"pnl_usd",
+			"avg_edge_pct",
+			"avg_slippage_bps",
+			"avg_hold_hours",
+			"max_drawdown_usd",
+			"cumulative_pnl",
+			"updated_at",
+		}),
+	}).Create(item).Error
+}
+
+func (s *Store) ListStrategyDailyStats(ctx context.Context, params repository.ListDailyStatsParams) ([]models.StrategyDailyStats, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.StrategyDailyStats{})
+	if params.StrategyName != nil && strings.TrimSpace(*params.StrategyName) != "" {
+		query = query.Where("strategy_name = ?", strings.TrimSpace(*params.StrategyName))
+	}
+	if params.Since != nil && !params.Since.IsZero() {
+		query = query.Where("date >= ?", params.Since.UTC())
+	}
+	if params.Until != nil && !params.Until.IsZero() {
+		query = query.Where("date <= ?", params.Until.UTC())
+	}
+	limit := normalizeLimit(params.Limit, 500)
+	offset := normalizeOffset(params.Offset)
+	var items []models.StrategyDailyStats
+	if err := query.Order("date desc, strategy_name asc").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) AttributionByStrategy(ctx context.Context, strategyName string, since, until *time.Time) (repository.AttributionResult, error) {
+	if s == nil || s.db == nil {
+		return repository.AttributionResult{}, nil
+	}
+	strategyName = strings.TrimSpace(strategyName)
+	if strategyName == "" {
+		return repository.AttributionResult{}, nil
+	}
+	query := s.db.WithContext(ctx).Table("pnl_records").Where("strategy_name = ?", strategyName)
+	if since != nil && !since.IsZero() {
+		query = query.Where("created_at >= ?", since.UTC())
+	}
+	if until != nil && !until.IsZero() {
+		query = query.Where("created_at <= ?", until.UTC())
+	}
+	var row struct {
+		Edge     float64
+		Slippage float64
+		Net      float64
+	}
+	if err := query.Select(`
+		COALESCE(SUM(COALESCE(expected_edge,0)),0) AS edge,
+		COALESCE(SUM(COALESCE(slippage_loss,0)),0) AS slippage,
+		COALESCE(SUM(COALESCE(realized_pnl,0)),0) AS net
+	`).Scan(&row).Error; err != nil {
+		return repository.AttributionResult{}, err
+	}
+
+	feeQuery := s.db.WithContext(ctx).
+		Table("fills AS f").
+		Select("COALESCE(SUM(COALESCE(f.fee,0)),0)").
+		Joins("JOIN execution_plans AS p ON p.id = f.plan_id").
+		Where("p.strategy_name = ?", strategyName)
+	if since != nil && !since.IsZero() {
+		feeQuery = feeQuery.Where("f.created_at >= ?", since.UTC())
+	}
+	if until != nil && !until.IsZero() {
+		feeQuery = feeQuery.Where("f.created_at <= ?", until.UTC())
+	}
+	var fee float64
+	if err := feeQuery.Scan(&fee).Error; err != nil {
+		return repository.AttributionResult{}, err
+	}
+	timing := row.Net - row.Edge + row.Slippage + fee
+	return repository.AttributionResult{
+		EdgeContribution: row.Edge,
+		SlippageCost:     row.Slippage,
+		FeeCost:          fee,
+		TimingValue:      timing,
+		NetPnL:           row.Net,
+	}, nil
+}
+
+func (s *Store) PortfolioDrawdown(ctx context.Context) (repository.DrawdownResult, error) {
+	if s == nil || s.db == nil {
+		return repository.DrawdownResult{}, nil
+	}
+	var rows []struct {
+		TS  *time.Time
+		PnL float64
+	}
+	if err := s.db.WithContext(ctx).Table("pnl_records").
+		Select("COALESCE(settled_at, created_at) AS ts, COALESCE(realized_pnl,0) AS pnl").
+		Order("COALESCE(settled_at, created_at) asc").
+		Scan(&rows).Error; err != nil {
+		return repository.DrawdownResult{}, err
+	}
+	if len(rows) == 0 {
+		return repository.DrawdownResult{}, nil
+	}
+	cum := 0.0
+	peak := 0.0
+	trough := 0.0
+	maxDD := 0.0
+	maxDDPct := 0.0
+	curDD := 0.0
+	var peakTime, troughTime *time.Time
+	for _, r := range rows {
+		cum += r.PnL
+		if cum > peak || peakTime == nil {
+			peak = cum
+			t := time.Now().UTC()
+			if r.TS != nil {
+				t = r.TS.UTC()
+			}
+			peakTime = &t
+		}
+		dd := peak - cum
+		if dd > maxDD {
+			maxDD = dd
+			trough = cum
+			t := time.Now().UTC()
+			if r.TS != nil {
+				t = r.TS.UTC()
+			}
+			troughTime = &t
+		}
+		if peak > 0 {
+			ddPct := dd / peak
+			if ddPct > maxDDPct {
+				maxDDPct = ddPct
+			}
+		}
+		curDD = dd
+	}
+	ddDays := 0
+	if peakTime != nil && troughTime != nil && troughTime.After(*peakTime) {
+		ddDays = int(troughTime.Sub(*peakTime).Hours() / 24)
+	}
+	return repository.DrawdownResult{
+		MaxDrawdownUSD:       maxDD,
+		MaxDrawdownPct:       maxDDPct,
+		DrawdownDurationDays: ddDays,
+		CurrentDrawdownUSD:   curDD,
+		PeakPnL:              peak,
+		TroughPnL:            trough,
+	}, nil
+}
+
+func (s *Store) StrategyCorrelation(ctx context.Context, since, until *time.Time) ([]repository.CorrelationRow, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Table("strategy_daily_stats")
+	if since != nil && !since.IsZero() {
+		query = query.Where("date >= ?", since.UTC())
+	}
+	if until != nil && !until.IsZero() {
+		query = query.Where("date <= ?", until.UTC())
+	}
+	var rows []struct {
+		Strategy string
+		Date     time.Time
+		PnL      float64
+	}
+	if err := query.Select("strategy_name AS strategy, date, COALESCE(pnl_usd,0) AS pnl").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	series := map[string]map[string]float64{}
+	for _, r := range rows {
+		if _, ok := series[r.Strategy]; !ok {
+			series[r.Strategy] = map[string]float64{}
+		}
+		series[r.Strategy][r.Date.Format("2006-01-02")] = r.PnL
+	}
+	names := make([]string, 0, len(series))
+	for n := range series {
+		names = append(names, n)
+	}
+	out := make([]repository.CorrelationRow, 0)
+	for i := 0; i < len(names); i++ {
+		for j := i; j < len(names); j++ {
+			a, b := names[i], names[j]
+			corr := correlationOfMaps(series[a], series[b])
+			out = append(out, repository.CorrelationRow{
+				StrategyA:   a,
+				StrategyB:   b,
+				Correlation: corr,
+			})
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) PerformanceRatios(ctx context.Context, since, until *time.Time) (repository.RatiosResult, error) {
+	if s == nil || s.db == nil {
+		return repository.RatiosResult{}, nil
+	}
+	query := s.db.WithContext(ctx).Table("pnl_records")
+	if since != nil && !since.IsZero() {
+		query = query.Where("created_at >= ?", since.UTC())
+	}
+	if until != nil && !until.IsZero() {
+		query = query.Where("created_at <= ?", until.UTC())
+	}
+	var rows []struct {
+		PnL float64
+	}
+	if err := query.Select("COALESCE(realized_pnl,0) AS pnl").Scan(&rows).Error; err != nil {
+		return repository.RatiosResult{}, err
+	}
+	if len(rows) == 0 {
+		return repository.RatiosResult{}, nil
+	}
+	return calcRatios(rows), nil
+}
+
+func (s *Store) RebuildStrategyDailyStats(ctx context.Context, since, until *time.Time) (int, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	query := s.db.WithContext(ctx).Table("pnl_records AS r")
+	if since != nil && !since.IsZero() {
+		query = query.Where("COALESCE(r.settled_at, r.created_at) >= ?", since.UTC())
+	}
+	if until != nil && !until.IsZero() {
+		query = query.Where("COALESCE(r.settled_at, r.created_at) <= ?", until.UTC())
+	}
+	var rows []struct {
+		StrategyName   string
+		Date           time.Time
+		TradesCount    int
+		WinCount       int
+		LossCount      int
+		PnLUSD         float64
+		AvgEdgePct     float64
+		AvgSlippageBps float64
+		AvgHoldHours   float64
+	}
+	err := query.
+		Select(`
+			r.strategy_name AS strategy_name,
+			DATE(COALESCE(r.settled_at, r.created_at)) AS date,
+			COUNT(*) AS trades_count,
+			COALESCE(SUM(CASE WHEN r.outcome = 'win' THEN 1 ELSE 0 END),0) AS win_count,
+			COALESCE(SUM(CASE WHEN r.outcome = 'loss' THEN 1 ELSE 0 END),0) AS loss_count,
+			COALESCE(SUM(COALESCE(r.realized_pnl,0)),0) AS pnl_usd,
+			COALESCE(AVG(COALESCE(r.expected_edge,0)),0) AS avg_edge_pct,
+			COALESCE(AVG(COALESCE(r.slippage_loss,0))*10000,0) AS avg_slippage_bps,
+			COALESCE(AVG(EXTRACT(EPOCH FROM (p.executed_at - p.created_at))/3600.0),0) AS avg_hold_hours
+		`).
+		Joins("LEFT JOIN execution_plans AS p ON p.id = r.plan_id").
+		Group("r.strategy_name, DATE(COALESCE(r.settled_at, r.created_at))").
+		Order("r.strategy_name asc, DATE(COALESCE(r.settled_at, r.created_at)) asc").
+		Scan(&rows).Error
+	if err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	cumByStrategy := map[string]float64{}
+	peakByStrategy := map[string]float64{}
+	updated := 0
+	for _, r := range rows {
+		name := strings.TrimSpace(r.StrategyName)
+		if name == "" {
+			continue
+		}
+		cum := cumByStrategy[name] + r.PnLUSD
+		cumByStrategy[name] = cum
+		peak := peakByStrategy[name]
+		if cum > peak {
+			peak = cum
+			peakByStrategy[name] = peak
+		}
+		maxDD := peak - cum
+		item := &models.StrategyDailyStats{
+			StrategyName:   name,
+			Date:           r.Date.UTC(),
+			TradesCount:    r.TradesCount,
+			WinCount:       r.WinCount,
+			LossCount:      r.LossCount,
+			PnLUSD:         decimal.NewFromFloat(r.PnLUSD),
+			AvgEdgePct:     decimal.NewFromFloat(r.AvgEdgePct),
+			AvgSlippageBps: decimal.NewFromFloat(r.AvgSlippageBps),
+			AvgHoldHours:   decimal.NewFromFloat(r.AvgHoldHours),
+			MaxDrawdownUSD: decimal.NewFromFloat(maxDD),
+			CumulativePnL:  decimal.NewFromFloat(cum),
+			UpdatedAt:      time.Now().UTC(),
+		}
+		if err := s.UpsertStrategyDailyStats(ctx, item); err != nil {
+			return updated, err
+		}
+		updated++
+	}
+	return updated, nil
+}
+
+func correlationOfMaps(a, b map[string]float64) float64 {
+	keys := map[string]struct{}{}
+	for k := range a {
+		keys[k] = struct{}{}
+	}
+	for k := range b {
+		keys[k] = struct{}{}
+	}
+	x := make([]float64, 0, len(keys))
+	y := make([]float64, 0, len(keys))
+	for k := range keys {
+		x = append(x, a[k])
+		y = append(y, b[k])
+	}
+	if len(x) < 2 {
+		return 0
+	}
+	mx := mean(x)
+	my := mean(y)
+	num := 0.0
+	dx := 0.0
+	dy := 0.0
+	for i := range x {
+		ax := x[i] - mx
+		by := y[i] - my
+		num += ax * by
+		dx += ax * ax
+		dy += by * by
+	}
+	if dx == 0 || dy == 0 {
+		return 0
+	}
+	return num / math.Sqrt(dx*dy)
+}
+
+func calcRatios(rows []struct{ PnL float64 }) repository.RatiosResult {
+	rets := make([]float64, 0, len(rows))
+	win := 0
+	loss := 0
+	sumPos := 0.0
+	sumNegAbs := 0.0
+	sum := 0.0
+	for _, r := range rows {
+		rets = append(rets, r.PnL)
+		sum += r.PnL
+		if r.PnL > 0 {
+			win++
+			sumPos += r.PnL
+		}
+		if r.PnL < 0 {
+			loss++
+			sumNegAbs += -r.PnL
+		}
+	}
+	m := mean(rets)
+	std := stddev(rets, m)
+	downside := downsideStd(rets, m)
+	sharpe := 0.0
+	sortino := 0.0
+	if std > 0 {
+		sharpe = m / std
+	}
+	if downside > 0 {
+		sortino = m / downside
+	}
+	winRate := float64(win) / float64(len(rows))
+	profitFactor := 0.0
+	if sumNegAbs > 0 {
+		profitFactor = sumPos / sumNegAbs
+	}
+	avgWin := 0.0
+	if win > 0 {
+		avgWin = sumPos / float64(win)
+	}
+	avgLoss := 0.0
+	if loss > 0 {
+		avgLoss = -sumNegAbs / float64(loss)
+	}
+	expectancy := sum / float64(len(rows))
+	return repository.RatiosResult{
+		SharpeRatio:  sharpe,
+		SortinoRatio: sortino,
+		WinRate:      winRate,
+		ProfitFactor: profitFactor,
+		AvgWin:       avgWin,
+		AvgLoss:      avgLoss,
+		Expectancy:   expectancy,
+	}
+}
+
+func mean(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	s := 0.0
+	for _, x := range v {
+		s += x
+	}
+	return s / float64(len(v))
+}
+
+func stddev(v []float64, m float64) float64 {
+	if len(v) < 2 {
+		return 0
+	}
+	s := 0.0
+	for _, x := range v {
+		d := x - m
+		s += d * d
+	}
+	return math.Sqrt(s / float64(len(v)))
+}
+
+func downsideStd(v []float64, target float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	s := 0.0
+	n := 0
+	for _, x := range v {
+		if x >= target {
+			continue
+		}
+		d := x - target
+		s += d * d
+		n++
+	}
+	if n == 0 {
+		return 0
+	}
+	return math.Sqrt(s / float64(n))
+}
+
 func (s *Store) UpsertMarketSettlementHistory(ctx context.Context, item *models.MarketSettlementHistory) error {
 	if s == nil || s.db == nil || item == nil {
 		return nil
@@ -825,6 +1856,26 @@ func (s *Store) ListMarketSettlementHistoryByMarketIDs(ctx context.Context, mark
 	if err := s.db.WithContext(ctx).
 		Model(&models.MarketSettlementHistory{}).
 		Where("market_id IN ?", marketIDs).
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) ListRecentMarketSettlementHistory(ctx context.Context, since time.Time, limit int) ([]models.MarketSettlementHistory, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	if since.IsZero() {
+		since = time.Now().UTC().Add(-24 * time.Hour)
+	}
+	limit = normalizeLimit(limit, 500)
+	var items []models.MarketSettlementHistory
+	if err := s.db.WithContext(ctx).
+		Model(&models.MarketSettlementHistory{}).
+		Where("settled_at >= ?", since.UTC()).
+		Order("settled_at desc").
+		Limit(limit).
 		Find(&items).Error; err != nil {
 		return nil, err
 	}
@@ -871,6 +1922,181 @@ func (s *Store) ListLabelNoRateStats(ctx context.Context, labels []string) ([]re
 		})
 	}
 	return out, nil
+}
+
+func (s *Store) UpsertMarketReview(ctx context.Context, item *models.MarketReview) error {
+	if s == nil || s.db == nil || item == nil {
+		return nil
+	}
+	item.MarketID = strings.TrimSpace(item.MarketID)
+	if item.MarketID == "" {
+		return nil
+	}
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "market_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"event_id",
+			"our_action",
+			"opportunity_id",
+			"strategy_name",
+			"edge_at_entry",
+			"final_outcome",
+			"final_price",
+			"hypothetical_pnl",
+			"actual_pnl",
+			"lesson_tags",
+			"notes",
+			"settled_at",
+			"updated_at",
+		}),
+	}).Create(item).Error
+}
+
+func (s *Store) GetMarketReviewByMarketID(ctx context.Context, marketID string) (*models.MarketReview, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	marketID = strings.TrimSpace(marketID)
+	if marketID == "" {
+		return nil, nil
+	}
+	var item models.MarketReview
+	err := s.db.WithContext(ctx).Model(&models.MarketReview{}).Where("market_id = ?", marketID).First(&item).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *Store) ListMarketReviews(ctx context.Context, params repository.ListMarketReviewParams) ([]models.MarketReview, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.MarketReview{})
+	if params.OurAction != nil && strings.TrimSpace(*params.OurAction) != "" {
+		query = query.Where("our_action = ?", strings.TrimSpace(*params.OurAction))
+	}
+	if params.StrategyName != nil && strings.TrimSpace(*params.StrategyName) != "" {
+		query = query.Where("strategy_name = ?", strings.TrimSpace(*params.StrategyName))
+	}
+	if params.Since != nil && !params.Since.IsZero() {
+		query = query.Where("settled_at >= ?", params.Since.UTC())
+	}
+	if params.Until != nil && !params.Until.IsZero() {
+		query = query.Where("settled_at <= ?", params.Until.UTC())
+	}
+	if params.MinPnL != nil {
+		query = query.Where("hypothetical_pnl >= ?", *params.MinPnL)
+	}
+	query = applyOrder(query, params.OrderBy, params.Asc, "hypothetical_pnl")
+	limit := normalizeLimit(params.Limit, 200)
+	offset := normalizeOffset(params.Offset)
+	var items []models.MarketReview
+	if err := query.Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Store) CountMarketReviews(ctx context.Context, params repository.ListMarketReviewParams) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.MarketReview{})
+	if params.OurAction != nil && strings.TrimSpace(*params.OurAction) != "" {
+		query = query.Where("our_action = ?", strings.TrimSpace(*params.OurAction))
+	}
+	if params.StrategyName != nil && strings.TrimSpace(*params.StrategyName) != "" {
+		query = query.Where("strategy_name = ?", strings.TrimSpace(*params.StrategyName))
+	}
+	if params.Since != nil && !params.Since.IsZero() {
+		query = query.Where("settled_at >= ?", params.Since.UTC())
+	}
+	if params.Until != nil && !params.Until.IsZero() {
+		query = query.Where("settled_at <= ?", params.Until.UTC())
+	}
+	if params.MinPnL != nil {
+		query = query.Where("hypothetical_pnl >= ?", *params.MinPnL)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (s *Store) MissedAlphaSummary(ctx context.Context) (repository.MissedAlphaSummary, error) {
+	if s == nil || s.db == nil {
+		return repository.MissedAlphaSummary{}, nil
+	}
+	var row struct {
+		TotalDismissed      int64
+		ProfitableDismissed int64
+		MissedAlphaUSD      float64
+		AvgMissedEdge       float64
+	}
+	err := s.db.WithContext(ctx).Table("market_reviews").
+		Select(`
+			COALESCE(SUM(CASE WHEN our_action = 'dismissed' THEN 1 ELSE 0 END),0) AS total_dismissed,
+			COALESCE(SUM(CASE WHEN our_action = 'dismissed' AND hypothetical_pnl > 0 THEN 1 ELSE 0 END),0) AS profitable_dismissed,
+			COALESCE(SUM(CASE WHEN our_action IN ('dismissed','expired','missed') AND hypothetical_pnl > 0 THEN hypothetical_pnl ELSE 0 END),0) AS missed_alpha_usd,
+			COALESCE(AVG(COALESCE(edge_at_entry,0)),0) AS avg_missed_edge
+		`).Scan(&row).Error
+	if err != nil {
+		return repository.MissedAlphaSummary{}, err
+	}
+	regret := 0.0
+	if row.TotalDismissed > 0 {
+		regret = float64(row.ProfitableDismissed) / float64(row.TotalDismissed)
+	}
+	return repository.MissedAlphaSummary{
+		TotalDismissed:      row.TotalDismissed,
+		ProfitableDismissed: row.ProfitableDismissed,
+		RegretRate:          regret,
+		MissedAlphaUSD:      row.MissedAlphaUSD,
+		AvgMissedEdge:       row.AvgMissedEdge,
+	}, nil
+}
+
+func (s *Store) LabelPerformance(ctx context.Context) ([]repository.LabelPerformanceRow, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var rows []repository.LabelPerformanceRow
+	err := s.db.WithContext(ctx).Table("market_reviews AS r").
+		Select(`
+			ml.label AS label,
+			COALESCE(SUM(CASE WHEN r.our_action = 'traded' THEN 1 ELSE 0 END),0) AS traded_count,
+			COALESCE(SUM(CASE WHEN r.our_action = 'traded' THEN r.actual_pnl ELSE 0 END),0) AS traded_pnl,
+			COALESCE(SUM(CASE WHEN r.our_action IN ('dismissed','expired','missed') THEN 1 ELSE 0 END),0) AS missed_count,
+			COALESCE(SUM(CASE WHEN r.our_action IN ('dismissed','expired','missed') THEN r.hypothetical_pnl ELSE 0 END),0) AS missed_alpha,
+			COALESCE(AVG(CASE WHEN r.our_action = 'traded' AND r.actual_pnl > 0 THEN 1.0 ELSE 0.0 END),0) AS win_rate
+		`).
+		Joins("JOIN market_labels AS ml ON ml.market_id = r.market_id").
+		Group("ml.label").
+		Order("missed_alpha desc").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (s *Store) UpdateMarketReviewNotes(ctx context.Context, id uint64, notes string, lessonTags []byte) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	if id == 0 {
+		return nil
+	}
+	return s.db.WithContext(ctx).Model(&models.MarketReview{}).Where("id = ?", id).Updates(map[string]any{
+		"notes":       strings.TrimSpace(notes),
+		"lesson_tags": lessonTags,
+		"updated_at":  time.Now().UTC(),
+	}).Error
 }
 
 func (s *Store) AnalyticsOverview(ctx context.Context) (repository.AnalyticsOverview, error) {

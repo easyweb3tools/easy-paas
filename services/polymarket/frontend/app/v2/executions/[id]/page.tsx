@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { apiGet, apiPost } from "@/lib/api";
+import { isSafePathSegment, toSafePathSegment } from "@/lib/path";
 
 type ExecutionPlan = {
   ID: number;
@@ -11,9 +12,9 @@ type ExecutionPlan = {
   Status: string;
   StrategyName: string;
   PlannedSizeUSD: string;
-  Params: unknown;
-  PreflightResult: unknown;
-  Legs: unknown;
+  Params: Record<string, unknown>;
+  PreflightResult: Record<string, unknown>;
+  Legs: Array<Record<string, unknown>>;
   ExecutedAt?: string | null;
   CreatedAt?: string;
   UpdatedAt?: string;
@@ -54,7 +55,11 @@ function pretty(v: unknown) {
 
 export default function ExecutionDetailPage() {
   const params = useParams<{ id: string }>();
-  const id = params.id;
+  const id = params.id ?? "";
+  const safeID = useMemo(() => {
+    if (!isSafePathSegment(id)) return "";
+    return toSafePathSegment(id);
+  }, [id]);
 
   const [plan, setPlan] = useState<ExecutionPlan | null>(null);
   const [pnl, setPnL] = useState<PnL | null>(null);
@@ -68,15 +73,22 @@ export default function ExecutionDetailPage() {
   const [fillFee, setFillFee] = useState("0");
 
   const [settleOutcomes, setSettleOutcomes] = useState("{}");
+  const loadingRef = useRef(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!safeID) {
+      setError("Invalid execution ID");
+      return;
+    }
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const body = await apiGet<ExecutionPlan>(`/api/v2/executions/${id}`, { cache: "no-store" });
+      const body = await apiGet<ExecutionPlan>(`/api/v2/executions/${safeID}`, { cache: "no-store", signal });
       setPlan(body.data);
       try {
-        const pnlBody = await apiGet<PnL>(`/api/v2/executions/${id}/pnl`, { cache: "no-store" });
+        const pnlBody = await apiGet<PnL>(`/api/v2/executions/${safeID}/pnl`, { cache: "no-store", signal });
         setPnL(pnlBody.data);
       } catch {
         setPnL(null);
@@ -95,21 +107,26 @@ export default function ExecutionDetailPage() {
         }
       }
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [id]);
+  }, [safeID]);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   const canAct = useMemo(() => !!plan && !loading, [plan, loading]);
 
   async function preflight() {
+    if (!safeID) return;
     try {
-      await apiPost(`/api/v2/executions/${id}/preflight`, {});
+      await apiPost(`/api/v2/executions/${safeID}/preflight`, {});
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "unknown error");
@@ -117,8 +134,9 @@ export default function ExecutionDetailPage() {
   }
 
   async function markExecuting() {
+    if (!safeID) return;
     try {
-      await apiPost(`/api/v2/executions/${id}/mark-executing`, {});
+      await apiPost(`/api/v2/executions/${safeID}/mark-executing`, {});
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "unknown error");
@@ -126,8 +144,19 @@ export default function ExecutionDetailPage() {
   }
 
   async function markExecuted() {
+    if (!safeID) return;
     try {
-      await apiPost(`/api/v2/executions/${id}/mark-executed`, {});
+      await apiPost(`/api/v2/executions/${safeID}/mark-executed`, {});
+      await refresh();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "unknown error");
+    }
+  }
+
+  async function submitToClob() {
+    if (!safeID) return;
+    try {
+      await apiPost(`/api/v2/executions/${safeID}/submit`, {});
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "unknown error");
@@ -135,8 +164,9 @@ export default function ExecutionDetailPage() {
   }
 
   async function cancel() {
+    if (!safeID) return;
     try {
-      await apiPost(`/api/v2/executions/${id}/cancel`, {});
+      await apiPost(`/api/v2/executions/${safeID}/cancel`, {});
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "unknown error");
@@ -144,8 +174,9 @@ export default function ExecutionDetailPage() {
   }
 
   async function addFill() {
+    if (!safeID) return;
     try {
-      await apiPost(`/api/v2/executions/${id}/fill`, {
+      await apiPost(`/api/v2/executions/${safeID}/fill`, {
         token_id: fillTokenId,
         direction: fillDirection,
         filled_size: fillSize,
@@ -159,9 +190,10 @@ export default function ExecutionDetailPage() {
   }
 
   async function settle() {
+    if (!safeID) return;
     try {
       const parsed = JSON.parse(settleOutcomes || "{}") as Record<string, string>;
-      await apiPost(`/api/v2/executions/${id}/settle`, { market_outcomes: parsed });
+      await apiPost(`/api/v2/executions/${safeID}/settle`, { market_outcomes: parsed });
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "invalid json");
@@ -170,7 +202,7 @@ export default function ExecutionDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -204,6 +236,13 @@ export default function ExecutionDetailPage() {
             </button>
             <button
               className="rounded-full border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-strong)]"
+              onClick={() => void submitToClob()}
+              disabled={!canAct}
+            >
+              Submit
+            </button>
+            <button
+              className="rounded-full border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-strong)]"
               onClick={() => void markExecuted()}
               disabled={!canAct}
             >
@@ -220,7 +259,7 @@ export default function ExecutionDetailPage() {
         </div>
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">Plan</p>
           <p className="text-xs text-[var(--muted)]">legs / params / preflight。</p>
@@ -228,20 +267,20 @@ export default function ExecutionDetailPage() {
         <div className="grid gap-4 px-6 py-5 md:grid-cols-2">
           <div>
             <div className="text-xs font-semibold text-[var(--muted)]">legs</div>
-            <pre className="mt-2 max-h-[320px] overflow-auto rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
+            <pre className="mt-2 max-h-[320px] overflow-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
               {pretty(plan?.Legs)}
             </pre>
           </div>
           <div className="flex flex-col gap-4">
             <div>
               <div className="text-xs font-semibold text-[var(--muted)]">params</div>
-              <pre className="mt-2 max-h-[140px] overflow-auto rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
+              <pre className="mt-2 max-h-[140px] overflow-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
                 {pretty(plan?.Params)}
               </pre>
             </div>
             <div>
               <div className="text-xs font-semibold text-[var(--muted)]">preflight_result</div>
-              <pre className="mt-2 max-h-[140px] overflow-auto rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
+              <pre className="mt-2 max-h-[140px] overflow-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
                 {pretty(plan?.PreflightResult)}
               </pre>
             </div>
@@ -249,7 +288,7 @@ export default function ExecutionDetailPage() {
         </div>
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">Add Fill</p>
           <p className="text-xs text-[var(--muted)]">录入成交后会把 plan 状态推进到 partial（MVP）。</p>
@@ -311,7 +350,7 @@ export default function ExecutionDetailPage() {
         </div>
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">Settle PnL</p>
           <p className="text-xs text-[var(--muted)]">
@@ -322,7 +361,7 @@ export default function ExecutionDetailPage() {
           <div>
             <div className="text-xs font-semibold text-[var(--muted)]">market_outcomes</div>
             <textarea
-              className="mt-2 h-56 w-full rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 font-mono text-xs"
+              className="mt-2 h-56 w-full rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 font-mono text-xs"
               value={settleOutcomes}
               onChange={(e) => setSettleOutcomes(e.target.value)}
             />
@@ -336,7 +375,7 @@ export default function ExecutionDetailPage() {
           </div>
           <div>
             <div className="text-xs font-semibold text-[var(--muted)]">pnl_record</div>
-            <pre className="mt-2 h-56 overflow-auto rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
+            <pre className="mt-2 h-56 overflow-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
               {pretty(pnl)}
             </pre>
           </div>

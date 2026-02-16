@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, apiPost, apiPut, ApiResponse } from "@/lib/api";
 
@@ -12,9 +12,9 @@ type Strategy = {
   Category: string;
   Enabled: boolean;
   Priority: number;
-  Params: unknown;
-  RequiredSignals: unknown;
-  Stats: unknown;
+  Params: Record<string, unknown>;
+  RequiredSignals: Array<string> | Record<string, unknown>;
+  Stats: Record<string, unknown>;
   UpdatedAt?: string;
 };
 
@@ -31,12 +31,15 @@ export default function StrategiesPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<Record<string, string>>({});
+  const loadingRef = useRef(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const body = await apiGet<Strategy[]>("/api/v2/strategies", { cache: "no-store" });
+      const body = await apiGet<Strategy[]>("/api/v2/strategies", { cache: "no-store", signal });
       setItems(body.data ?? []);
       const next: Record<string, string> = {};
       for (const it of body.data ?? []) {
@@ -44,19 +47,24 @@ export default function StrategiesPage() {
       }
       setEditing(next);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   async function setEnabled(name: string, enabled: boolean) {
     try {
-      await apiPost(`/api/v2/strategies/${name}/${enabled ? "enable" : "disable"}`, {});
+      const safeName = encodeURIComponent(name);
+      await apiPost(`/api/v2/strategies/${safeName}/${enabled ? "enable" : "disable"}`, {});
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "unknown error");
@@ -67,7 +75,8 @@ export default function StrategiesPage() {
     try {
       const raw = editing[name] ?? "{}";
       JSON.parse(raw);
-      await apiPut(`/api/v2/strategies/${name}/params`, JSON.parse(raw));
+      const safeName = encodeURIComponent(name);
+      await apiPut(`/api/v2/strategies/${safeName}/params`, JSON.parse(raw));
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "invalid json");
@@ -80,7 +89,7 @@ export default function StrategiesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -101,7 +110,7 @@ export default function StrategiesPage() {
         {error ? <div className="mt-4 text-sm text-red-500">{error}</div> : null}
       </section>
 
-      <section className="glass-panel relative overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel relative overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="relative z-10 border-b border-[color:var(--border)] px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -113,7 +122,11 @@ export default function StrategiesPage() {
         </div>
 
         {loading ? (
-          <div className="px-6 py-10 text-sm text-[var(--muted)]">加载中...</div>
+          <div className="space-y-2 px-6 py-6">
+            <div className="skeleton h-6 w-1/2" />
+            <div className="skeleton h-16 w-full" />
+            <div className="skeleton h-16 w-full" />
+          </div>
         ) : byPriority.length === 0 ? (
           <div className="px-6 py-10 text-sm text-[var(--muted)]">暂无数据（需要先启动策略引擎写入 strategies 表）</div>
         ) : (
@@ -153,14 +166,14 @@ export default function StrategiesPage() {
                   <div>
                     <div className="text-xs font-semibold text-[var(--muted)]">params</div>
                     <textarea
-                      className="mt-2 h-44 w-full rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 font-mono text-xs"
+                      className="mt-2 h-44 w-full rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 font-mono text-xs"
                       value={editing[it.Name] ?? "{}"}
                       onChange={(e) => setEditing((prev) => ({ ...prev, [it.Name]: e.target.value }))}
                     />
                   </div>
                   <div>
                     <div className="text-xs font-semibold text-[var(--muted)]">stats</div>
-                    <pre className="mt-2 h-44 overflow-auto rounded-2xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
+                    <pre className="mt-2 h-44 overflow-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-xs">
                       {pretty(it.Stats)}
                     </pre>
                   </div>
@@ -173,4 +186,3 @@ export default function StrategiesPage() {
     </div>
   );
 }
-

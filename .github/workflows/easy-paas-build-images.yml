@@ -28,24 +28,14 @@ jobs:
             image: easyweb3-polymarket-frontend
             context: ./services/polymarket/frontend
             dockerfile: ./services/polymarket/frontend/Dockerfile
-          - name: picoclaw
-            image: easyweb3-picoclaw
+          - name: openclaw
+            image: easyweb3-openclaw
             context: .
-            dockerfile: ./picoclaw.Dockerfile
+            dockerfile: ./openclaw/Dockerfile
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Update Submodules To Latest (For Build)
-        shell: bash
-        run: |
-          set -euo pipefail
-          git submodule sync --recursive
-          # For this repo, we intentionally build with latest upstream picoclaw code.
-          git submodule update --init --recursive --remote --depth 1
 
       - name: Compute Version Tag
         id: vars
@@ -117,8 +107,12 @@ jobs:
             STATUS="FAILURE"
           fi
 
-          TEXT="$(printf '[%s] %s (%s)\n- build: %s\n- images: easyweb3-platform, easyweb3-polymarket-backend, easyweb3-polymarket-frontend, easyweb3-picoclaw\nsha: %s\nrun: https://github.com/%s/actions/runs/%s' \
-            "${STATUS}" "${GITHUB_REPOSITORY}" "${GITHUB_REF_NAME}" "${BUILD_RESULT}" "${GITHUB_SHA}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}")"
+          TEXT="$(printf '%s\n' \
+            "[${STATUS}] ${GITHUB_REPOSITORY} (${GITHUB_REF_NAME})" \
+            "- build: ${BUILD_RESULT}" \
+            "- images: easyweb3-platform, easyweb3-polymarket-backend, easyweb3-polymarket-frontend, easyweb3-openclaw" \
+            "sha: ${GITHUB_SHA}" \
+            "run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
 
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \

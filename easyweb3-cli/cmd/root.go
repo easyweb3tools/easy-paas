@@ -31,7 +31,7 @@ Commands:
   notify   send/broadcast/config
   integrations query|polymarket
   cache    get/put/delete
-  api      raw
+  api      raw|polymarket
   docs     url/get (public docs)
   service  list/health/docs
 `)

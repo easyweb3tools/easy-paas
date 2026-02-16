@@ -283,6 +283,9 @@ func (s *stubRepo) UpdateExecutionPlanPreflight(ctx context.Context, id uint64, 
 func (s *stubRepo) UpdateExecutionPlanExecutedAt(ctx context.Context, id uint64, status string, executedAt *time.Time) error {
 	return nil
 }
+func (s *stubRepo) CountExecutionPlansByStrategySince(ctx context.Context, strategyName string, since time.Time) (int64, error) {
+	return 0, nil
+}
 func (s *stubRepo) InsertFill(ctx context.Context, item *models.Fill) error { return nil }
 func (s *stubRepo) ListFillsByPlanID(ctx context.Context, planID uint64) ([]models.Fill, error) {
 	return nil, nil
@@ -294,6 +297,109 @@ func (s *stubRepo) GetPnLRecordByPlanID(ctx context.Context, planID uint64) (*mo
 func (s *stubRepo) SumRealizedPnLSince(ctx context.Context, since time.Time) (decimal.Decimal, error) {
 	return decimal.Zero, nil
 }
+func (s *stubRepo) UpsertExecutionRule(ctx context.Context, item *models.ExecutionRule) error {
+	return nil
+}
+func (s *stubRepo) GetExecutionRuleByStrategyName(ctx context.Context, strategyName string) (*models.ExecutionRule, error) {
+	return nil, nil
+}
+func (s *stubRepo) ListExecutionRules(ctx context.Context) ([]models.ExecutionRule, error) {
+	return nil, nil
+}
+func (s *stubRepo) DeleteExecutionRuleByStrategyName(ctx context.Context, strategyName string) error {
+	return nil
+}
+
+func (s *stubRepo) InsertTradeJournal(ctx context.Context, item *models.TradeJournal) error {
+	return nil
+}
+func (s *stubRepo) GetTradeJournalByPlanID(ctx context.Context, planID uint64) (*models.TradeJournal, error) {
+	return nil, nil
+}
+func (s *stubRepo) UpdateTradeJournalExit(ctx context.Context, planID uint64, updates map[string]any) error {
+	return nil
+}
+func (s *stubRepo) UpdateTradeJournalNotes(ctx context.Context, planID uint64, notes string, tags []byte, reviewedAt *time.Time) error {
+	return nil
+}
+func (s *stubRepo) ListTradeJournals(ctx context.Context, params repository.ListTradeJournalParams) ([]models.TradeJournal, error) {
+	return nil, nil
+}
+func (s *stubRepo) CountTradeJournals(ctx context.Context, params repository.ListTradeJournalParams) (int64, error) {
+	return 0, nil
+}
+func (s *stubRepo) UpsertSystemSetting(ctx context.Context, item *models.SystemSetting) error {
+	return nil
+}
+func (s *stubRepo) GetSystemSettingByKey(ctx context.Context, key string) (*models.SystemSetting, error) {
+	return nil, nil
+}
+func (s *stubRepo) ListSystemSettings(ctx context.Context, params repository.ListSystemSettingsParams) ([]models.SystemSetting, error) {
+	return nil, nil
+}
+func (s *stubRepo) CountSystemSettings(ctx context.Context, params repository.ListSystemSettingsParams) (int64, error) {
+	return 0, nil
+}
+func (s *stubRepo) UpsertPosition(ctx context.Context, item *models.Position) error { return nil }
+func (s *stubRepo) GetPositionByID(ctx context.Context, id uint64) (*models.Position, error) {
+	return nil, nil
+}
+func (s *stubRepo) GetPositionByTokenID(ctx context.Context, tokenID string) (*models.Position, error) {
+	return nil, nil
+}
+func (s *stubRepo) ListPositions(ctx context.Context, params repository.ListPositionsParams) ([]models.Position, error) {
+	return nil, nil
+}
+func (s *stubRepo) CountPositions(ctx context.Context, params repository.ListPositionsParams) (int64, error) {
+	return 0, nil
+}
+func (s *stubRepo) ListOpenPositions(ctx context.Context) ([]models.Position, error) { return nil, nil }
+func (s *stubRepo) ClosePosition(ctx context.Context, id uint64, realizedPnL decimal.Decimal, closedAt time.Time) error {
+	return nil
+}
+func (s *stubRepo) PositionsSummary(ctx context.Context) (repository.PositionsSummary, error) {
+	return repository.PositionsSummary{}, nil
+}
+func (s *stubRepo) InsertPortfolioSnapshot(ctx context.Context, item *models.PortfolioSnapshot) error {
+	return nil
+}
+func (s *stubRepo) ListPortfolioSnapshots(ctx context.Context, params repository.ListPortfolioSnapshotsParams) ([]models.PortfolioSnapshot, error) {
+	return nil, nil
+}
+func (s *stubRepo) InsertOrder(ctx context.Context, item *models.Order) error { return nil }
+func (s *stubRepo) GetOrderByID(ctx context.Context, id uint64) (*models.Order, error) {
+	return nil, nil
+}
+func (s *stubRepo) ListOrders(ctx context.Context, params repository.ListOrdersParams) ([]models.Order, error) {
+	return nil, nil
+}
+func (s *stubRepo) CountOrders(ctx context.Context, params repository.ListOrdersParams) (int64, error) {
+	return 0, nil
+}
+func (s *stubRepo) UpdateOrderStatus(ctx context.Context, id uint64, status string, updates map[string]any) error {
+	return nil
+}
+func (s *stubRepo) UpsertStrategyDailyStats(ctx context.Context, item *models.StrategyDailyStats) error {
+	return nil
+}
+func (s *stubRepo) ListStrategyDailyStats(ctx context.Context, params repository.ListDailyStatsParams) ([]models.StrategyDailyStats, error) {
+	return nil, nil
+}
+func (s *stubRepo) AttributionByStrategy(ctx context.Context, strategyName string, since, until *time.Time) (repository.AttributionResult, error) {
+	return repository.AttributionResult{}, nil
+}
+func (s *stubRepo) PortfolioDrawdown(ctx context.Context) (repository.DrawdownResult, error) {
+	return repository.DrawdownResult{}, nil
+}
+func (s *stubRepo) StrategyCorrelation(ctx context.Context, since, until *time.Time) ([]repository.CorrelationRow, error) {
+	return nil, nil
+}
+func (s *stubRepo) PerformanceRatios(ctx context.Context, since, until *time.Time) (repository.RatiosResult, error) {
+	return repository.RatiosResult{}, nil
+}
+func (s *stubRepo) RebuildStrategyDailyStats(ctx context.Context, since, until *time.Time) (int, error) {
+	return 0, nil
+}
 
 func (s *stubRepo) UpsertMarketSettlementHistory(ctx context.Context, item *models.MarketSettlementHistory) error {
 	return nil
@@ -301,8 +407,32 @@ func (s *stubRepo) UpsertMarketSettlementHistory(ctx context.Context, item *mode
 func (s *stubRepo) ListMarketSettlementHistoryByMarketIDs(ctx context.Context, marketIDs []string) ([]models.MarketSettlementHistory, error) {
 	return nil, nil
 }
+func (s *stubRepo) ListRecentMarketSettlementHistory(ctx context.Context, since time.Time, limit int) ([]models.MarketSettlementHistory, error) {
+	return nil, nil
+}
 func (s *stubRepo) ListLabelNoRateStats(ctx context.Context, labels []string) ([]repository.LabelNoRateRow, error) {
 	return nil, nil
+}
+func (s *stubRepo) UpsertMarketReview(ctx context.Context, item *models.MarketReview) error {
+	return nil
+}
+func (s *stubRepo) GetMarketReviewByMarketID(ctx context.Context, marketID string) (*models.MarketReview, error) {
+	return nil, nil
+}
+func (s *stubRepo) ListMarketReviews(ctx context.Context, params repository.ListMarketReviewParams) ([]models.MarketReview, error) {
+	return nil, nil
+}
+func (s *stubRepo) CountMarketReviews(ctx context.Context, params repository.ListMarketReviewParams) (int64, error) {
+	return 0, nil
+}
+func (s *stubRepo) MissedAlphaSummary(ctx context.Context) (repository.MissedAlphaSummary, error) {
+	return repository.MissedAlphaSummary{}, nil
+}
+func (s *stubRepo) LabelPerformance(ctx context.Context) ([]repository.LabelPerformanceRow, error) {
+	return nil, nil
+}
+func (s *stubRepo) UpdateMarketReviewNotes(ctx context.Context, id uint64, notes string, lessonTags []byte) error {
+	return nil
 }
 
 func (s *stubRepo) AnalyticsOverview(ctx context.Context) (repository.AnalyticsOverview, error) {

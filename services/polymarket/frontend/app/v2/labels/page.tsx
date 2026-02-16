@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
+import { DEFAULTS } from "@/lib/constants";
+import { toSafePathSegment } from "@/lib/path";
 
 type LabelRow = {
   ID: number;
@@ -22,24 +24,35 @@ export default function LabelsPage() {
   const [marketId, setMarketId] = useState("");
   const [label, setLabel] = useState("");
   const [subLabel, setSubLabel] = useState("");
+  const loadingRef = useRef(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const body = await apiGet<LabelRow[]>(`/api/v2/markets/labels?limit=200&order_by=created_at&order=desc`, {
-        cache: "no-store",
-      });
+      const body = await apiGet<LabelRow[]>(
+        `/api/v2/markets/labels?limit=${DEFAULTS.LABEL_PAGE_LIMIT}&order_by=created_at&order=desc`,
+        {
+          cache: "no-store",
+          signal,
+        }
+      );
       setItems(body.data ?? []);
     } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   async function autoLabel() {
@@ -53,7 +66,8 @@ export default function LabelsPage() {
 
   async function add() {
     try {
-      await apiPost(`/api/v2/markets/${marketId}/labels`, {
+      const safeMarketID = toSafePathSegment(marketId);
+      await apiPost(`/api/v2/markets/${safeMarketID}/labels`, {
         label,
         sub_label: subLabel ? subLabel : null,
         auto_labeled: false,
@@ -69,7 +83,9 @@ export default function LabelsPage() {
 
   async function del(marketID: string, labelName: string) {
     try {
-      await apiDelete(`/api/v2/markets/${marketID}/labels/${labelName}`);
+      const safeMarketID = toSafePathSegment(marketID);
+      const safeLabel = toSafePathSegment(labelName);
+      await apiDelete(`/api/v2/markets/${safeMarketID}/labels/${safeLabel}`);
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "unknown error");
@@ -78,7 +94,7 @@ export default function LabelsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
+      <section className="rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">V2</p>
@@ -107,7 +123,7 @@ export default function LabelsPage() {
         {error ? <div className="mt-4 text-sm text-red-500">{error}</div> : null}
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">Add Label</p>
         </div>
@@ -151,11 +167,11 @@ export default function LabelsPage() {
         </div>
       </section>
 
-      <section className="glass-panel rounded-[28px] border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="glass-panel rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[color:var(--border)] px-6 py-4">
           <p className="text-sm font-semibold">List</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-[color:var(--glass)] text-xs uppercase tracking-[0.15em] text-[var(--muted)]">
               <tr>
@@ -187,6 +203,23 @@ export default function LabelsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {items.map((it) => (
+            <div key={`m-${it.ID}`} className="rounded-xl border border-[color:var(--border)] bg-[var(--surface-strong)] p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs">{it.MarketID}</span>
+                <span className="text-xs">{it.Label}</span>
+              </div>
+              <div className="mt-1 text-xs text-[var(--muted)]">sub: {it.SubLabel ?? "--"} · conf {it.Confidence.toFixed(2)}</div>
+              <button
+                className="mt-2 rounded-lg border border-[color:var(--border)] px-3 py-2 text-xs"
+                onClick={() => void del(it.MarketID, it.Label)}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
         </div>
       </section>
     </div>

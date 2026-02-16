@@ -66,7 +66,7 @@ go build -o /tmp/easyweb3 .
 
 # Public docs
 /tmp/easyweb3 --api-base http://127.0.0.1:18080 docs get architecture >/dev/null
-/tmp/easyweb3 --api-base http://127.0.0.1:18080 docs get picoclaw >/dev/null
+/tmp/easyweb3 --api-base http://127.0.0.1:18080 docs get openclaw >/dev/null
 
 # Configure notifications for current project (bootstrap admin project = platform)
 /tmp/easyweb3 --api-base http://127.0.0.1:18080 notify config put \

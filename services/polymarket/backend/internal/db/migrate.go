@@ -32,6 +32,14 @@ func AutoMigrate(db *DB) error {
 		&models.Fill{},
 		&models.PnLRecord{},
 		&models.MarketSettlementHistory{},
+		&models.ExecutionRule{},
+		&models.TradeJournal{},
+		&models.SystemSetting{},
+		&models.Position{},
+		&models.PortfolioSnapshot{},
+		&models.Order{},
+		&models.StrategyDailyStats{},
+		&models.MarketReview{},
 	); err != nil {
 		return err
 	}

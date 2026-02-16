@@ -28,6 +28,7 @@ type SettlementIngestService struct {
 	Gamma  *polymarketgamma.Client
 	Config config.SettlementIngestConfig
 	Logger *zap.Logger
+	Flags  *SystemSettingsService
 }
 
 func (s *SettlementIngestService) Run(ctx context.Context) error {
@@ -39,7 +40,7 @@ func (s *SettlementIngestService) Run(ctx context.Context) error {
 		interval = 6 * time.Hour
 	}
 	// Run once on start.
-	_ = s.RunOnce(ctx)
+	_ = s.runOnceIfEnabled(ctx)
 
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -48,9 +49,16 @@ func (s *SettlementIngestService) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-t.C:
-			_ = s.RunOnce(ctx)
+			_ = s.runOnceIfEnabled(ctx)
 		}
 	}
+}
+
+func (s *SettlementIngestService) runOnceIfEnabled(ctx context.Context) error {
+	if s != nil && s.Flags != nil && !s.Flags.IsEnabled(ctx, FeatureSettlementIngest, false) {
+		return nil
+	}
+	return s.RunOnce(ctx)
 }
 
 func (s *SettlementIngestService) RunOnce(ctx context.Context) error {
