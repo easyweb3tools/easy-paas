@@ -16,7 +16,7 @@ import (
 	"polymarket/internal/models"
 )
 
-// WeatherAPICollector polls weather APIs (OpenWeather compatible) and emits "weather_deviation" signals.
+// WeatherAPICollector polls weather APIs (WeatherAPI.com/OpenWeather compatible) and emits "weather_deviation" signals.
 // MVP: signals are city-scoped (no market_id); the WeatherStrategy maps city -> labeled markets.
 type WeatherAPICollector struct {
 	HTTP   *http.Client
@@ -181,7 +181,7 @@ func (c *WeatherAPICollector) fetchWeightedForecastTempF(ctx context.Context, ci
 		if strings.TrimSpace(s.APIKeyEnv) != "" {
 			key = strings.TrimSpace(os.Getenv(strings.TrimSpace(s.APIKeyEnv)))
 		}
-		temp, err := c.fetchOpenWeatherForecastTempF(ctx, s.Endpoint, key, city)
+		temp, err := c.fetchTempFBySource(ctx, s, key, city)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", s.Name, err))
 			continue
@@ -208,6 +208,79 @@ func (c *WeatherAPICollector) fetchWeightedForecastTempF(ctx context.Context, ci
 		return 0, details, fmt.Errorf("no successful sources: %s", strings.Join(errs, "; "))
 	}
 	return sum / sumW, details, nil
+}
+
+func (c *WeatherAPICollector) fetchTempFBySource(ctx context.Context, src config.WeatherAPISource, apiKey, city string) (float64, error) {
+	kind := strings.ToLower(strings.TrimSpace(src.Kind))
+	endpoint := strings.TrimSpace(src.Endpoint)
+	switch {
+	case strings.Contains(kind, "weatherapi"), strings.Contains(endpoint, "weatherapi.com"):
+		return c.fetchWeatherAPIForecastTempF(ctx, endpoint, apiKey, city)
+	default:
+		return c.fetchOpenWeatherForecastTempF(ctx, endpoint, apiKey, city)
+	}
+}
+
+// WeatherAPI.com compatible endpoint:
+// - endpoint should point to /v1/forecast.json or /v1/current.json.
+// - query params: key, q, (optional) days.
+func (c *WeatherAPICollector) fetchWeatherAPIForecastTempF(ctx context.Context, endpoint string, apiKey string, city string) (float64, error) {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return 0, fmt.Errorf("empty endpoint")
+	}
+	if strings.TrimSpace(apiKey) == "" {
+		return 0, fmt.Errorf("empty api key")
+	}
+	qCity := strings.ReplaceAll(strings.TrimSpace(city), "-", " ")
+	url := endpoint
+	sep := "?"
+	if strings.Contains(url, "?") {
+		sep = "&"
+	}
+	url = url + sep + "key=" + urlQueryEscape(apiKey) + "&q=" + urlQueryEscape(qCity)
+	if strings.Contains(strings.ToLower(endpoint), "/forecast") && !strings.Contains(url, "days=") {
+		url += "&days=1&aqi=no&alerts=no"
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return 0, fmt.Errorf("http %d", resp.StatusCode)
+	}
+	var parsed struct {
+		Current struct {
+			TempF float64 `json:"temp_f"`
+		} `json:"current"`
+		Forecast struct {
+			ForecastDay []struct {
+				Day struct {
+					AvgTempF float64 `json:"avgtemp_f"`
+					MaxTempF float64 `json:"maxtemp_f"`
+					MinTempF float64 `json:"mintemp_f"`
+				} `json:"day"`
+			} `json:"forecastday"`
+		} `json:"forecast"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return 0, err
+	}
+	if len(parsed.Forecast.ForecastDay) > 0 {
+		day := parsed.Forecast.ForecastDay[0].Day
+		if day.AvgTempF != 0 {
+			return day.AvgTempF, nil
+		}
+		if day.MaxTempF != 0 || day.MinTempF != 0 {
+			return (day.MaxTempF + day.MinTempF) / 2.0, nil
+		}
+	}
+	if parsed.Current.TempF != 0 {
+		return parsed.Current.TempF, nil
+	}
+	return 0, fmt.Errorf("no temperature in weatherapi response")
 }
 
 // OpenWeather compatible endpoint:
