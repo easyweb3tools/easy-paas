@@ -352,3 +352,34 @@ func TestLiquidityRewardStrategy_Evaluate(t *testing.T) {
 		t.Fatalf("expected >=1 opportunity")
 	}
 }
+
+func TestMarketAnomalyStrategy_Evaluate(t *testing.T) {
+	now := time.Now().UTC()
+	repo := &stubRepo{
+		tokensByMarket: map[string][]models.Token{
+			"m1": {
+				{ID: "y1", MarketID: "m1", Outcome: "Yes"},
+				{ID: "n1", MarketID: "m1", Outcome: "No"},
+			},
+		},
+		booksByToken: map[string]models.OrderbookLatest{
+			// YES token with extreme cheap price (0.03).
+			"y1": mkBook(t, "y1", 0.03, 100, now),
+		},
+	}
+	s := &MarketAnomalyStrategy{Repo: repo}
+	_ = s.SetParams(s.DefaultParams())
+
+	payload := datatypes.JSON([]byte(`{"anomaly_type":"extreme_cheap","yes_price":0.03}`))
+	sig := models.Signal{ID: 12, SignalType: "price_anomaly", Source: "internal_scan", MarketID: strPtr("m1"), TokenID: strPtr("y1"), Strength: 0.8, Direction: "YES", Payload: payload, CreatedAt: now}
+	opps, err := s.Evaluate(context.Background(), []models.Signal{sig})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(opps) != 1 {
+		t.Fatalf("opps=%d want=1", len(opps))
+	}
+	if opps[0].EdgePct.LessThanOrEqual(decimal.Zero) {
+		t.Fatalf("edge_pct=%s want>0", opps[0].EdgePct.String())
+	}
+}

@@ -50,6 +50,12 @@ type InternalScanCollector struct {
 	FDVNoPriceMin   float64
 	FDVNoPriceMax   float64
 	FDVMaxPerTick   int
+
+	// S4 price anomaly signal tuning.
+	AnomalyExtremeHigh float64 // default 0.95
+	AnomalyExtremeLow  float64 // default 0.05
+	AnomalyMaxPerTick  int     // default 100
+	lastAnomaly        map[string]time.Time
 }
 
 func (c *InternalScanCollector) Name() string { return "internal_scan" }
@@ -85,6 +91,7 @@ func (c *InternalScanCollector) Start(ctx context.Context, out chan<- models.Sig
 			c.emitArbSumDeviation(ctx, out, now)
 			c.emitNoBias(ctx, out, now)
 			c.emitFDVOverpriced(ctx, out, now)
+			c.emitPriceAnomaly(ctx, out, now)
 		}
 	}
 }
@@ -671,6 +678,116 @@ func (c *InternalScanCollector) emitFDVOverpriced(ctx context.Context, out chan<
 			ExpiresAt:  &expires,
 			CreatedAt:  now,
 		}
+		emitted++
+	}
+}
+
+func (c *InternalScanCollector) emitPriceAnomaly(ctx context.Context, out chan<- models.Signal, now time.Time) {
+	extremeHigh := c.AnomalyExtremeHigh
+	if extremeHigh <= 0 {
+		extremeHigh = 0.95
+	}
+	extremeLow := c.AnomalyExtremeLow
+	if extremeLow <= 0 {
+		extremeLow = 0.05
+	}
+	maxPerTick := c.AnomalyMaxPerTick
+	if maxPerTick <= 0 {
+		maxPerTick = 100
+	}
+	if c.lastAnomaly == nil {
+		c.lastAnomaly = map[string]time.Time{}
+	}
+
+	// Reuse the same data source as liquidity_gap.
+	rows, err := c.Repo.ListMarketDataHealthCandidates(ctx, 2000, 0)
+	if err != nil {
+		if c.Logger != nil {
+			c.Logger.Warn("internal scan price anomaly candidates failed", zap.Error(err))
+		}
+		return
+	}
+	tokenIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row.TokenID) != "" {
+			tokenIDs = append(tokenIDs, strings.TrimSpace(row.TokenID))
+		}
+	}
+	if len(tokenIDs) == 0 {
+		return
+	}
+
+	// Load YES tokens only.
+	toks, _ := c.Repo.ListTokensByIDs(ctx, tokenIDs)
+	yesTokenIDs := make([]string, 0, len(toks))
+	tokenByID := map[string]models.Token{}
+	for _, t := range toks {
+		tokenByID[t.ID] = t
+		if strings.EqualFold(strings.TrimSpace(t.Outcome), "yes") {
+			yesTokenIDs = append(yesTokenIDs, t.ID)
+		}
+	}
+	if len(yesTokenIDs) == 0 {
+		return
+	}
+
+	books, _ := c.Repo.ListOrderbookLatestByTokenIDs(ctx, yesTokenIDs)
+	trades, _ := c.Repo.ListLastTradePricesByTokenIDs(ctx, yesTokenIDs)
+	bookByToken := map[string]models.OrderbookLatest{}
+	for _, b := range books {
+		bookByToken[b.TokenID] = b
+	}
+	tradeByToken := map[string]models.LastTradePrice{}
+	for _, tr := range trades {
+		tradeByToken[tr.TokenID] = tr
+	}
+
+	emitted := 0
+	for _, tokenID := range yesTokenIDs {
+		if emitted >= maxPerTick {
+			break
+		}
+		// 10-minute cooldown per token.
+		if last, ok := c.lastAnomaly[tokenID]; ok && now.Sub(last) < 10*time.Minute {
+			continue
+		}
+		price, ok := currentPrice(bookByToken[tokenID], tradeByToken[tokenID])
+		if !ok {
+			continue
+		}
+
+		var anomalyType, direction string
+		var strength float64
+		if price <= extremeLow {
+			anomalyType = "extreme_cheap"
+			direction = "YES"
+			strength = clamp01((extremeLow - price) / extremeLow) // closer to 0 => stronger
+		} else if price >= extremeHigh {
+			anomalyType = "extreme_expensive"
+			direction = "NO"
+			strength = clamp01((price - extremeHigh) / (1.0 - extremeHigh))
+		} else {
+			continue
+		}
+
+		tok := tokenByID[tokenID]
+		marketID := tok.MarketID
+
+		payload, _ := json.Marshal(map[string]any{
+			"anomaly_type": anomalyType,
+			"yes_price":    price,
+		})
+		out <- models.Signal{
+			SignalType: "price_anomaly",
+			Source:     "internal_scan",
+			MarketID:   strPtr(marketID),
+			TokenID:    strPtr(tokenID),
+			Strength:   strength,
+			Direction:  direction,
+			Payload:    datatypes.JSON(payload),
+			CreatedAt:  now,
+		}
+		c.lastAnomaly[tokenID] = now
 		emitted++
 	}
 }

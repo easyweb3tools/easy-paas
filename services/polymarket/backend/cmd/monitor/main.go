@@ -318,6 +318,17 @@ func main() {
 		}()
 	}
 
+	// Run labeler once before strategy engine so label-dependent signals
+	// (no_bias, fdv_overpriced) have data from the first scan tick.
+	if marketLabeler != nil {
+		logger.Info("running initial label pass before strategy engine")
+		if err := marketLabeler.LabelMarkets(baseCtx); err != nil {
+			logger.Warn("initial label pass failed (continuing)", zap.Error(err))
+		} else {
+			logger.Info("initial label pass complete")
+		}
+	}
+
 	if settingsSvc.IsEnabled(baseCtx, service.FeatureStrategyEngine, false) {
 		hub := signalhub.NewHub(store, logger)
 		hub.Register(&signalhub.SettlementHistoryCollector{
@@ -394,6 +405,7 @@ func main() {
 				&strategy.MMBehaviorStrategy{Repo: store, Logger: logger},
 				&strategy.CertaintySweepStrategy{Repo: store, Logger: logger},
 				&strategy.LiquidityRewardStrategy{Repo: store, Logger: logger},
+			&strategy.MarketAnomalyStrategy{Repo: store, Logger: logger},
 			},
 		}
 		go func() {

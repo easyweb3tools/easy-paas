@@ -36,9 +36,9 @@ func DefaultFeatureSwitches() map[string]bool {
 	return map[string]bool{
 		FeatureCatalogSync:        true,
 		FeatureCLOBStream:         true,
-		FeatureStrategyEngine:     false,
-		FeatureLabeler:            false,
-		FeatureSettlementIngest:   false,
+		FeatureStrategyEngine:     true,
+		FeatureLabeler:            true,
+		FeatureSettlementIngest:   true,
 		FeatureAutoExecutor:       false,
 		FeaturePositionSync:       true,
 		FeaturePortfolioSnapshot:  true,
@@ -69,6 +69,19 @@ func (s *SystemSettingsService) EnsureDefaultSwitches(ctx context.Context) error
 			return err
 		}
 		if existing != nil {
+			// Upgrade OFF → ON: if the default is now true but the stored
+			// value is false, update it. Never turn an ON switch OFF.
+			if enabled {
+				var current bool
+				if err := json.Unmarshal(existing.Value, &current); err == nil && !current {
+					raw, _ := json.Marshal(true)
+					existing.Value = datatypes.JSON(raw)
+					existing.UpdatedAt = now
+					if err := s.Repo.UpsertSystemSetting(ctx, existing); err != nil {
+						return err
+					}
+				}
+			}
 			continue
 		}
 		raw, _ := json.Marshal(enabled)

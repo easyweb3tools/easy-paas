@@ -192,6 +192,8 @@ func defaultDedupWindow(signalType string) time.Duration {
 		return 2 * time.Minute
 	case "liquidity_gap":
 		return 2 * time.Minute
+	case "price_anomaly":
+		return 5 * time.Minute
 	default:
 		return 30 * time.Second
 	}
@@ -205,6 +207,8 @@ func defaultSignalTTL(signalType string) time.Duration {
 		return 2 * time.Hour
 	case "liquidity_gap":
 		return 10 * time.Minute
+	case "price_anomaly":
+		return 30 * time.Minute
 	default:
 		return 10 * time.Minute
 	}

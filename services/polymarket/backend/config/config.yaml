@@ -111,10 +111,16 @@ auto_executor:
 strategy_defaults:
   arb_sum:
     enabled: true
+    min_deviation_pct: 1.0
+    min_profit_usd: 2.0
   systematic_no:
     enabled: true
+  liquidity_reward:
+    enabled: true
   pre_market_fdv:
-    enabled: false
+    enabled: true
+  market_anomaly:
+    enabled: true
 arbitrage:
   enabled: true
   scan_interval: "15s"

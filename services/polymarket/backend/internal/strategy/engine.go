@@ -308,6 +308,9 @@ func (e *Engine) ensureStrategyRow(ctx context.Context, ev StrategyEvaluator) er
 	case "liquidity_reward":
 		category = "yield"
 		priority = 2
+	case "market_anomaly":
+		category = "data_driven"
+		priority = 2
 	}
 
 	enabled := false
