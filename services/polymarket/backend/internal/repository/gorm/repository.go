@@ -2951,4 +2951,55 @@ func (s *Store) ListActiveEventsEndingSoon(ctx context.Context, hoursToExpiry in
 	return items, nil
 }
 
+func (s *Store) CountOrderbookLatest(ctx context.Context, freshWindow time.Duration) (total int64, fresh int64, err error) {
+	if s == nil || s.db == nil {
+		return 0, 0, nil
+	}
+	if err := s.db.WithContext(ctx).Model(&models.OrderbookLatest{}).Count(&total).Error; err != nil {
+		return 0, 0, err
+	}
+	if freshWindow > 0 {
+		cutoff := time.Now().UTC().Add(-freshWindow)
+		if err := s.db.WithContext(ctx).Model(&models.OrderbookLatest{}).Where("updated_at >= ?", cutoff).Count(&fresh).Error; err != nil {
+			return total, 0, err
+		}
+	}
+	return total, fresh, nil
+}
+
+func (s *Store) CountMarketLabels(ctx context.Context) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	var total int64
+	if err := s.db.WithContext(ctx).Model(&models.MarketLabel{}).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (s *Store) CountSignalsByType(ctx context.Context, since *time.Time) (map[string]int64, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	query := s.db.WithContext(ctx).Model(&models.Signal{}).
+		Select("signal_type, COUNT(*) as cnt").
+		Group("signal_type")
+	if since != nil && !since.IsZero() {
+		query = query.Where("created_at >= ?", since.UTC())
+	}
+	var rows []struct {
+		SignalType string
+		Cnt        int64
+	}
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		out[r.SignalType] = r.Cnt
+	}
+	return out, nil
+}
+
 var _ repository.CatalogRepository = (*Store)(nil)

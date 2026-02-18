@@ -44,7 +44,7 @@ func (s *ArbitrageSumStrategy) Name() string { return "arb_sum" }
 func (s *ArbitrageSumStrategy) RequiredSignals() []string { return []string{"arb_sum_deviation"} }
 
 func (s *ArbitrageSumStrategy) DefaultParams() json.RawMessage {
-	return json.RawMessage(`{"min_deviation_pct":2.0,"min_profit_usd":5.0,"min_liquidity_usd":1000,"alpha_extraction":0.9,"use_orderbook_depth":true,"max_legs":10}`)
+	return json.RawMessage(`{"min_deviation_pct":1.0,"min_profit_usd":2.0,"min_liquidity_usd":1000,"alpha_extraction":0.9,"use_orderbook_depth":true,"max_legs":10}`)
 }
 
 func (s *ArbitrageSumStrategy) SetParams(raw json.RawMessage) error {
@@ -101,10 +101,10 @@ func (s *ArbitrageSumStrategy) Evaluate(ctx context.Context, signals []models.Si
 	maxLegs := s.MaxLegs
 	s.mu.RUnlock()
 	if minDevPct <= 0 {
-		minDevPct = 2.0
+		minDevPct = 1.0
 	}
 	if minProfit <= 0 {
-		minProfit = 5.0
+		minProfit = 2.0
 	}
 	_ = minLiq
 	if alpha <= 0 || alpha > 1 {

@@ -93,6 +93,39 @@ func DefaultRules() []LabelRule {
 			TagMatch:   []string{"Crypto"},
 			Confidence: 0.85,
 		},
+		// Broad-coverage rules for systematic_no pipeline.
+		{
+			Label: "election",
+			TitleRegex: []string{
+				`(?i)(election|vote|voting|ballot|presidential|parliament|senator|congress|governor)`,
+			},
+			TagMatch:   []string{"Politics", "Elections"},
+			Confidence: 0.75,
+		},
+		{
+			Label: "regulation",
+			TitleRegex: []string{
+				`(?i)(SEC|FDA|approve|approval|regulatory|regulate|sanction|ban|legislation|bill\s+pass)`,
+			},
+			TagMatch:   []string{"Regulation", "Law", "Government"},
+			Confidence: 0.75,
+		},
+		{
+			Label: "tge_deadline",
+			TitleRegex: []string{
+				`(?i)(TGE|token\s+generation|token\s+launch|airdrop|listing\s+before|listing\s+by)`,
+			},
+			TagMatch:   []string{"Crypto", "DeFi", "Token Launch"},
+			Confidence: 0.80,
+		},
+		{
+			Label: "macro_economic",
+			TitleRegex: []string{
+				`(?i)(GDP|CPI|inflation|interest\s+rate|fed\s+rate|federal\s+reserve|recession|unemployment\s+rate)`,
+			},
+			TagMatch:   []string{"Economics", "Finance", "Federal Reserve"},
+			Confidence: 0.75,
+		},
 	}
 }
 

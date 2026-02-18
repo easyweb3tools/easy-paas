@@ -66,3 +66,39 @@ func TestMatchTags(t *testing.T) {
 		t.Fatalf("expected false")
 	}
 }
+
+func TestBroadLabelRules(t *testing.T) {
+	rules := DefaultRules()
+	l := &MarketLabeler{Rules: rules}
+	l.compile()
+
+	tests := []struct {
+		title string
+		want  string
+	}{
+		{"Will the 2024 presidential election be won by Biden?", "election"},
+		{"Will voters approve the ballot measure in November?", "election"},
+		{"Will the SEC approve the Bitcoin ETF?", "regulation"},
+		{"Will the FDA approve the new drug before March?", "regulation"},
+		{"Will the TGE for Project X happen before Q2?", "tge_deadline"},
+		{"Will the token launch before July 2025?", "tge_deadline"},
+		{"Will GDP growth exceed 3% in Q1?", "macro_economic"},
+		{"Will the Fed rate be above 5% in June?", "macro_economic"},
+		{"Will CPI come in below 3% for January?", "macro_economic"},
+	}
+
+	ruleByLabel := map[string]*LabelRule{}
+	for i := range l.Rules {
+		ruleByLabel[l.Rules[i].Label] = &l.Rules[i]
+	}
+
+	for _, tt := range tests {
+		rule := ruleByLabel[tt.want]
+		if rule == nil {
+			t.Fatalf("missing rule for label %q", tt.want)
+		}
+		if !matchAny(*rule, tt.title) {
+			t.Errorf("expected label %q to match title %q", tt.want, tt.title)
+		}
+	}
+}

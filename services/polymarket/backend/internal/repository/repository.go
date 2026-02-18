@@ -181,6 +181,11 @@ type Repository interface {
 	AnalyticsByStrategy(ctx context.Context) ([]StrategyAnalyticsRow, error)
 	AnalyticsStrategyOutcomes(ctx context.Context) ([]StrategyOutcomeRow, error)
 	AnalyticsFailures(ctx context.Context) ([]FailureAnalyticsRow, error)
+
+	// Pipeline observability (L10)
+	CountOrderbookLatest(ctx context.Context, freshWindow time.Duration) (total int64, fresh int64, err error)
+	CountMarketLabels(ctx context.Context) (int64, error)
+	CountSignalsByType(ctx context.Context, since *time.Time) (map[string]int64, error)
 }
 
 type TokenJumpCandidate struct {

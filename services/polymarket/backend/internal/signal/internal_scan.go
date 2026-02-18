@@ -160,7 +160,7 @@ func (c *InternalScanCollector) emitArbSumDeviation(ctx context.Context, out cha
 	}
 	minDevPct := c.ArbMinDeviationPct
 	if minDevPct <= 0 {
-		minDevPct = 2.0
+		minDevPct = 1.0
 	}
 
 	aggs, err := c.Repo.ListMarketAggregates(ctx, candidateEvents)
@@ -269,15 +269,15 @@ func (c *InternalScanCollector) emitArbSumDeviation(ctx context.Context, out cha
 func (c *InternalScanCollector) emitNoBias(ctx context.Context, out chan<- models.Signal, now time.Time) {
 	labels := c.NoBiasLabels
 	if len(labels) == 0 {
-		labels = []string{"pre_market_fdv", "geopolitical", "safe_no", "tge_deadline"}
+		labels = []string{"pre_market_fdv", "geopolitical", "safe_no", "tge_deadline", "election", "regulation", "macro_economic"}
 	}
 	priceMin := c.NoBiasPriceMin
 	if priceMin <= 0 {
-		priceMin = 0.20
+		priceMin = 0.10
 	}
 	priceMax := c.NoBiasPriceMax
 	if priceMax <= 0 {
-		priceMax = 0.55
+		priceMax = 0.70
 	}
 	minEV := c.NoBiasMinEVPct
 	if minEV <= 0 {
@@ -456,6 +456,12 @@ func categoryNoRate(label string) float64 {
 		return 0.95
 	case "tge_deadline":
 		return 0.80
+	case "election":
+		return 0.80
+	case "regulation":
+		return 0.82
+	case "macro_economic":
+		return 0.78
 	default:
 		return 0.806
 	}

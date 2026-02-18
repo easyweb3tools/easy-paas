@@ -92,6 +92,15 @@ func (s *CatalogSyncService) Sync(ctx context.Context, opts SyncOptions) (SyncRe
 		result.BookAssets = book.Assets
 		result.BookErrors = book.Errors
 		return result, nil
+	case "books_only":
+		result := SyncResult{Scope: "books_only"}
+		book, err := s.resyncBooks(ctx, opts)
+		if err != nil {
+			return result, err
+		}
+		result.BookAssets = book.Assets
+		result.BookErrors = book.Errors
+		return result, nil
 	default:
 		return SyncResult{}, fmt.Errorf("unsupported scope: %s", scope)
 	}

@@ -48,9 +48,9 @@ func DefaultFeatureSwitches() map[string]bool {
 		FeatureSignalBinanceWS:    false,
 		FeatureSignalBinancePrice: false,
 		FeatureSignalWeatherAPI:   false,
-		FeatureSignalPriceChange:  false,
-		FeatureSignalOrderbook:    false,
-		FeatureSignalCertainty:    false,
+		FeatureSignalPriceChange:  true,  // internal DB poller — feeds news_alpha, volatility_spread
+		FeatureSignalOrderbook:    true,  // internal DB poller — feeds fear_spike, mm_inventory_skew
+		FeatureSignalCertainty:    true,  // internal DB poller — feeds certainty_sweep
 	}
 }
 

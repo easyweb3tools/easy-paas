@@ -447,3 +447,13 @@ func (s *stubRepo) AnalyticsStrategyOutcomes(ctx context.Context) ([]repository.
 func (s *stubRepo) AnalyticsFailures(ctx context.Context) ([]repository.FailureAnalyticsRow, error) {
 	return nil, nil
 }
+
+func (s *stubRepo) CountOrderbookLatest(ctx context.Context, freshWindow time.Duration) (int64, int64, error) {
+	return 0, 0, nil
+}
+func (s *stubRepo) CountMarketLabels(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+func (s *stubRepo) CountSignalsByType(ctx context.Context, since *time.Time) (map[string]int64, error) {
+	return nil, nil
+}

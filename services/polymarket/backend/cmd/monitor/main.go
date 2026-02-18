@@ -166,6 +166,8 @@ func main() {
 	v2Journal.Register(engine)
 	v2Settings := &handler.V2SystemSettingsHandler{Repo: store, Settings: settingsSvc}
 	v2Settings.Register(engine)
+	v2Pipeline := &handler.V2PipelineHandler{Repo: store}
+	v2Pipeline.Register(engine)
 
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -326,6 +328,25 @@ func main() {
 			logger.Warn("initial label pass failed (continuing)", zap.Error(err))
 		} else {
 			logger.Info("initial label pass complete")
+		}
+	}
+
+	// Bootstrap orderbook data via REST so strategy engine has prices on first tick.
+	{
+		logger.Info("running initial orderbook bootstrap before strategy engine")
+		bookResult, err := catalogService.Sync(baseCtx, service.SyncOptions{
+			Scope:             "books_only",
+			BookMaxAssets:     cfg.CatalogSync.BookMaxAssets,
+			BookBatchSize:     cfg.CatalogSync.BookBatchSize,
+			BookSleepPerBatch: cfg.CatalogSync.BookSleepPerBatch,
+		})
+		if err != nil {
+			logger.Warn("initial orderbook bootstrap failed (continuing)", zap.Error(err))
+		} else {
+			logger.Info("initial orderbook bootstrap complete",
+				zap.Int("assets", bookResult.BookAssets),
+				zap.Int("errors", bookResult.BookErrors),
+			)
 		}
 	}
 

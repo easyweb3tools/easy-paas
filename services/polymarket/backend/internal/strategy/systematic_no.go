@@ -34,7 +34,7 @@ func (s *SystematicNOStrategy) Name() string { return "systematic_no" }
 func (s *SystematicNOStrategy) RequiredSignals() []string { return []string{"no_bias"} }
 
 func (s *SystematicNOStrategy) DefaultParams() json.RawMessage {
-	return json.RawMessage(`{"no_price_range":[0.20,0.55],"min_ev_pct":10.0,"historical_no_rate":0.806,"category_no_rates":{},"stop_loss_no_price":0.65}`)
+	return json.RawMessage(`{"no_price_range":[0.10,0.70],"min_ev_pct":10.0,"historical_no_rate":0.806,"category_no_rates":{},"stop_loss_no_price":0.80}`)
 }
 
 func (s *SystematicNOStrategy) SetParams(raw json.RawMessage) error {
@@ -85,13 +85,13 @@ func (s *SystematicNOStrategy) Evaluate(ctx context.Context, signals []models.Si
 		minEV = 10.0
 	}
 	if priceMin <= 0 {
-		priceMin = 0.20
+		priceMin = 0.10
 	}
 	if priceMax <= 0 {
-		priceMax = 0.55
+		priceMax = 0.70
 	}
 	if stopLoss <= 0 {
-		stopLoss = 0.65
+		stopLoss = 0.80
 	}
 
 	var payload struct {

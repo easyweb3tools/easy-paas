@@ -47,6 +47,7 @@ func (m *Manager) Filter(opps []models.Opportunity) []models.Opportunity {
 	stratMap := m.strategyMap()
 	dailyLoss := m.dailyPnL()
 	out := make([]models.Opportunity, 0, len(opps))
+	filtered := 0
 	for _, opp := range opps {
 		if m.rejectStale(opp) {
 			action := strings.ToLower(strings.TrimSpace(m.Config.StaleDataAction))
@@ -56,16 +57,47 @@ func (m *Manager) Filter(opps []models.Opportunity) []models.Opportunity {
 			if action == "warn" {
 				opp = appendOppWarning(opp, "stale_data")
 			} else {
+				filtered++
+				if m.Logger != nil {
+					m.Logger.Debug("risk: reject stale",
+						zap.Int("data_age_ms", opp.DataAgeMs),
+						zap.Int("threshold_ms", m.Config.MinDataFreshnessMs),
+						zap.String("reasoning", opp.Reasoning),
+					)
+				}
 				continue
 			}
 		}
 		if m.rejectDailyLoss(dailyLoss) {
+			filtered++
+			if m.Logger != nil {
+				m.Logger.Debug("risk: reject daily loss",
+					zap.String("daily_pnl", dailyLoss.StringFixed(2)),
+					zap.Float64("limit_usd", m.Config.MaxDailyLossUSD),
+					zap.String("reasoning", opp.Reasoning),
+				)
+			}
 			continue
 		}
 		if m.rejectExposure(exp, stratMap, opp) {
+			filtered++
+			if m.Logger != nil {
+				m.Logger.Debug("risk: reject exposure",
+					zap.String("total_exposure", exp.Total.StringFixed(2)),
+					zap.Float64("max_total_usd", m.Config.MaxTotalExposureUSD),
+					zap.String("reasoning", opp.Reasoning),
+				)
+			}
 			continue
 		}
 		out = append(out, opp)
+	}
+	if m.Logger != nil && (filtered > 0 || len(opps) > 0) {
+		m.Logger.Info("risk: filtered opportunities",
+			zap.Int("filtered", filtered),
+			zap.Int("total", len(opps)),
+			zap.Int("passed", len(out)),
+		)
 	}
 	return out
 }
