@@ -56,7 +56,7 @@ export default function OpportunitiesPage() {
   const [status, setStatus] = useState("active");
   const [strategy, setStrategy] = useState("");
   const [category, setCategory] = useState("");
-  const [minEdge, setMinEdge] = useState<string>(DEFAULTS.MIN_EDGE);
+  const [minEdge, setMinEdge] = useState<string>("");
   const [minConfidence, setMinConfidence] = useState("");
   const loadingRef = useRef(false);
 
